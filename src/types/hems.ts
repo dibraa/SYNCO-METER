@@ -1,4 +1,4 @@
-export type TabType = 'home' | 'rooms' | 'analytics' | 'reports' | 'profile';
+export type TabType = 'home' | 'usage' | 'appliances' | 'alerts' | 'settings';
 
 export type SystemMode = 'Auto' | 'Eco' | 'Manual';
 

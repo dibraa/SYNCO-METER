@@ -43,16 +43,13 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
         </View>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton}>
-            <MaterialCommunityIcons name="bell-outline" size={20} color="#4B5563" />
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => setActiveTab('profile')}
+            onPress={() => setActiveTab('settings')}
             accessibilityRole="button"
-            accessibilityLabel="View Profile"
+            accessibilityLabel="Settings"
           >
-            <MaterialCommunityIcons name="account-outline" size={20} color="#4B5563" />
+            <MaterialCommunityIcons name="cog-outline" size={20} color="#4B5563" />
           </TouchableOpacity>
         </View>
       </View>
@@ -118,7 +115,7 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
 
             <View style={styles.costCol}>
               <Text style={styles.cycleLabel}>EST. COST</Text>
-              <Text style={styles.costVal}>${report.totalCost.toFixed(2)}</Text>
+              <Text style={styles.costVal}>₱{report.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
             </View>
           </View>
 
@@ -148,7 +145,7 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
               </View>
             </View>
             <View style={styles.reclaimedBadge}>
-              <Text style={styles.reclaimedText}>+${report.reclaimedCost.toFixed(2)}</Text>
+              <Text style={styles.reclaimedText}>+₱{report.reclaimedCost.toFixed(2)}</Text>
             </View>
           </View>
         </View>
@@ -267,7 +264,7 @@ const styles = StyleSheet.create({
   },
   brandSubtitle: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#4B5563',
     fontWeight: '500',
   },
   headerRight: {
@@ -275,9 +272,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -306,7 +303,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
   toggleBtnActive: {
-    backgroundColor: '#84CC16', // Bright lime green pill
+    backgroundColor: '#00C853',
   },
   toggleBtnText: {
     fontSize: 12,
@@ -319,8 +316,8 @@ const styles = StyleSheet.create({
   },
   cycleCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -380,7 +377,7 @@ const styles = StyleSheet.create({
   splitText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#4B5563',
   },
   savingsBanner: {
     flexDirection: 'row',
@@ -458,7 +455,7 @@ const styles = StyleSheet.create({
   subMeterCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -485,8 +482,8 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   subMeterCode: {
-    fontSize: 10,
-    color: '#9CA3AF',
+    fontSize: 11,
+    color: '#6B7280',
     marginBottom: 10,
   },
   progressBarBg: {
@@ -525,11 +522,11 @@ const styles = StyleSheet.create({
   },
   recentLogs: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: '#6B7280',
   },
   logsCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -562,7 +559,7 @@ const styles = StyleSheet.create({
   },
   logBreakdown: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: '#6B7280',
     marginTop: 2,
   },
   logRight: {

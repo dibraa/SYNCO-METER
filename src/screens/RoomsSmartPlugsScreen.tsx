@@ -95,20 +95,17 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
           <View style={styles.avatarCircle}>
             <MaterialCommunityIcons name="lightning-bolt" size={20} color="#00C853" />
           </View>
-          <View>
-            <Text style={styles.superTitle}>SMART POWER</Text>
-            <Text style={styles.mainTitle}>SYNCO METER</Text>
-          </View>
+          <Text style={styles.mainTitle}>SYNCO METER</Text>
         </View>
 
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerBtn}
-            onPress={() => setActiveTab('profile')}
+            onPress={() => setActiveTab('settings')}
             accessibilityRole="button"
-            accessibilityLabel="View Profile"
+            accessibilityLabel="Settings"
           >
-            <MaterialCommunityIcons name="account-outline" size={20} color="#4B5563" />
+            <MaterialCommunityIcons name="cog-outline" size={20} color="#4B5563" />
           </TouchableOpacity>
         </View>
       </View>
@@ -198,12 +195,18 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
                 </Text>
               </View>
             </View>
-            <Switch
-              value={node1.relayState}
-              onValueChange={() => toggleNodeRelay('node-1')}
-              trackColor={{ false: '#E5E7EB', true: '#00C853' }}
-              thumbColor="#FFFFFF"
-            />
+            <View style={styles.switchWrap}>
+              <Text style={[styles.switchLabel, node1.relayState && styles.switchLabelActive]}>
+                {node1.relayState ? 'ON' : 'OFF'}
+              </Text>
+              <Switch
+                value={node1.relayState}
+                onValueChange={() => toggleNodeRelay('node-1')}
+                trackColor={{ false: '#E5E7EB', true: '#00C853' }}
+                thumbColor="#FFFFFF"
+                accessibilityLabel={`Room 1 Plug power switch, currently ${node1.relayState ? 'on' : 'off'}`}
+              />
+            </View>
           </View>
         </View>
 
@@ -283,12 +286,18 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
                 </Text>
               </View>
             </View>
-            <Switch
-              value={node2.relayState}
-              onValueChange={() => toggleNodeRelay('node-2')}
-              trackColor={{ false: '#E5E7EB', true: '#F59E0B' }}
-              thumbColor="#FFFFFF"
-            />
+            <View style={styles.switchWrap}>
+              <Text style={[styles.switchLabel, node2.relayState && styles.switchLabelActive]}>
+                {node2.relayState ? 'ON' : 'OFF'}
+              </Text>
+              <Switch
+                value={node2.relayState}
+                onValueChange={() => toggleNodeRelay('node-2')}
+                trackColor={{ false: '#E5E7EB', true: '#F59E0B' }}
+                thumbColor="#FFFFFF"
+                accessibilityLabel={`Room 2 Plug power switch, currently ${node2.relayState ? 'on' : 'off'}`}
+              />
+            </View>
           </View>
 
           {/* Keep ON for 30m Button */}
@@ -345,12 +354,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  superTitle: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#9CA3AF',
-    letterSpacing: 1,
-  },
   mainTitle: {
     fontSize: 16,
     fontWeight: '800',
@@ -361,9 +364,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -380,8 +383,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -401,7 +404,7 @@ const styles = StyleSheet.create({
   },
   totalLoadLabel: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#4B5563',
     fontWeight: '500',
   },
   totalWattsRow: {
@@ -439,18 +442,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#00C853',
   },
   syncedBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#00C853',
   },
   gridVoltText: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#4B5563',
   },
   roomCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -480,7 +483,7 @@ const styles = StyleSheet.create({
   },
   roomSub: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#4B5563',
   },
   occupiedPill: {
     flexDirection: 'row',
@@ -550,21 +553,17 @@ const styles = StyleSheet.create({
     color: '#9A3412',
   },
   cutoffSub: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#C2410C',
   },
   cutoffTimer: {
     fontSize: 16,
     fontWeight: '900',
     color: '#EA580C',
-    letterSpacing: 0.5,
   },
   roomMetricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
-    padding: 14,
     marginBottom: 14,
   },
   metricBlock: {
@@ -573,7 +572,7 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#4B5563',
     marginBottom: 4,
   },
   metricValRow: {
@@ -592,14 +591,14 @@ const styles = StyleSheet.create({
     color: '#4B5563',
   },
   metricTrend: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#00C853',
     marginTop: 2,
   },
   metricTrendSub: {
-    fontSize: 10,
-    color: '#9CA3AF',
+    fontSize: 11,
+    color: '#6B7280',
     marginTop: 2,
   },
   plugControlRow: {
@@ -620,7 +619,19 @@ const styles = StyleSheet.create({
   },
   plugControlSub: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#4B5563',
+  },
+  switchWrap: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  switchLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
+  switchLabelActive: {
+    color: '#00C853',
   },
   keepOnButton: {
     flexDirection: 'row',
@@ -628,7 +639,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     backgroundColor: '#E8F5E9',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingVertical: 10,
     marginTop: 12,
   },
@@ -642,8 +653,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
   },

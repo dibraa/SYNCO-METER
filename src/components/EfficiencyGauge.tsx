@@ -122,16 +122,11 @@ export const EfficiencyGauge: React.FC<EfficiencyGaugeProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
   },
   header: {
     flexDirection: 'row',
@@ -144,7 +139,7 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#111827',
   },
@@ -178,10 +173,10 @@ const styles = StyleSheet.create({
   ecoText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#4B5563',
   },
   scoreText: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '900',
     color: '#111827',
   },
@@ -195,7 +190,7 @@ const styles = StyleSheet.create({
   },
   ratioText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#4B5563',
   },
   ratioBold: {
     fontWeight: '700',
@@ -211,8 +206,8 @@ const styles = StyleSheet.create({
   statTile: {
     flex: 1,
     backgroundColor: '#F9FAFB',
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#F3F4F6',
   },
@@ -231,7 +226,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tileVal: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '900',
     color: '#111827',
   },
@@ -243,7 +238,7 @@ const styles = StyleSheet.create({
   },
   tileSub: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#4B5563',
     marginTop: 2,
   },
 });

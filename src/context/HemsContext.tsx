@@ -31,6 +31,14 @@ export const HemsProvider: React.FC<{
   onSignOut?: () => void;
 }> = ({ children, onSignOut }) => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
+
+  // Ensure activeTab is always a valid tab
+  useEffect(() => {
+    const validTabs: TabType[] = ['home', 'usage', 'appliances', 'alerts', 'settings'];
+    if (!validTabs.includes(activeTab)) {
+      setActiveTab('home');
+    }
+  }, [activeTab]);
   const [systemMode, setSystemMode] = useState<SystemMode>('Auto');
   const [ruleApplied, setRuleApplied] = useState(false);
 
@@ -53,7 +61,7 @@ export const HemsProvider: React.FC<{
       frequency: 60.0,
       todayKwh: 5.14,
       monthKwh: 135.4,
-      todayCost: 0.82,
+      todayCost: 61.68,
       sharePercentage: 62,
       peakSpikeWatts: 1480,
       autoTrips: 28,
@@ -77,7 +85,7 @@ export const HemsProvider: React.FC<{
       frequency: 60.0,
       todayKwh: 3.28,
       monthKwh: 83.0,
-      todayCost: 0.44,
+      todayCost: 39.36,
       sharePercentage: 38,
       peakSpikeWatts: 920,
       autoTrips: 35,
@@ -88,10 +96,10 @@ export const HemsProvider: React.FC<{
     month: 'February 2025',
     totalKwh: 218.4,
     benchmarkDiffPercent: -8.2,
-    totalCost: 34.94,
-    tariffPerKwh: 0.16,
+    totalCost: 2620.80,
+    tariffPerKwh: 12.00,
     autoSavedKwh: 52.8,
-    reclaimedCost: 8.45,
+    reclaimedCost: 633.60,
     efficiencyScore: 88,
     selfPoweredPercent: 88,
     gridDependencePercent: 12,
@@ -228,7 +236,7 @@ export const HemsProvider: React.FC<{
   const averageVoltage = nodes.length > 0 ? nodes[0].voltage : 228.4;
   const averagePowerFactor = 0.96;
   const todayTotalKwh = +(nodes.reduce((sum, n) => sum + n.todayKwh, 0)).toFixed(2);
-  const todayEstimatedCost = +(todayTotalKwh * 0.15).toFixed(2);
+  const todayEstimatedCost = +(todayTotalKwh * 12.00).toFixed(2);
   const todaySavedKwh = 1.85;
 
   const signOut = () => {

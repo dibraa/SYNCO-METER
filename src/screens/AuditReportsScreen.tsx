@@ -50,16 +50,13 @@ export const AuditReportsScreen: React.FC = () => {
         </View>
 
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity style={styles.calendarBtn}>
-            <MaterialCommunityIcons name="calendar-month-outline" size={20} color="#111827" />
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.calendarBtn}
-            onPress={() => setActiveTab('profile')}
+            onPress={() => setActiveTab('settings')}
             accessibilityRole="button"
-            accessibilityLabel="View Profile"
+            accessibilityLabel="Settings"
           >
-            <MaterialCommunityIcons name="account-outline" size={20} color="#111827" />
+            <MaterialCommunityIcons name="cog-outline" size={20} color="#111827" />
           </TouchableOpacity>
         </View>
       </View>
@@ -160,8 +157,8 @@ export const AuditReportsScreen: React.FC = () => {
         <View style={styles.tilesRow}>
           <View style={styles.statTile}>
             <Text style={styles.tileLabel}>Total Cost</Text>
-            <Text style={styles.tileMainVal}>${report.totalCost.toFixed(2)}</Text>
-            <Text style={styles.tileSubVal}>${report.tariffPerKwh.toFixed(3)} / kWh</Text>
+            <Text style={styles.tileMainVal}>₱{report.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+            <Text style={styles.tileSubVal}>₱{report.tariffPerKwh.toFixed(2)} / kWh</Text>
           </View>
 
           <View style={styles.statTile}>
@@ -172,7 +169,7 @@ export const AuditReportsScreen: React.FC = () => {
             <Text style={styles.tileMainVal}>
               {report.autoSavedKwh} <Text style={styles.smallKwh}>kWh</Text>
             </Text>
-            <Text style={styles.tileReclaimed}>+${report.reclaimedCost.toFixed(2)} reclaimed</Text>
+            <Text style={styles.tileReclaimed}>+₱{report.reclaimedCost.toFixed(2)} reclaimed</Text>
           </View>
         </View>
 
@@ -211,7 +208,7 @@ export const AuditReportsScreen: React.FC = () => {
 
             <View style={styles.hwRight}>
               <Text style={styles.hwKwh}>{node1.monthKwh} kWh</Text>
-              <Text style={styles.hwBilled}>${(node1.monthKwh * report.tariffPerKwh).toFixed(2)} billed</Text>
+              <Text style={styles.hwBilled}>₱{(node1.monthKwh * report.tariffPerKwh).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} billed</Text>
             </View>
           </View>
 
@@ -247,7 +244,7 @@ export const AuditReportsScreen: React.FC = () => {
 
             <View style={styles.hwRight}>
               <Text style={styles.hwKwh}>{node2.monthKwh} kWh</Text>
-              <Text style={styles.hwBilled}>${(node2.monthKwh * report.tariffPerKwh).toFixed(2)} billed</Text>
+              <Text style={styles.hwBilled}>₱{(node2.monthKwh * report.tariffPerKwh).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} billed</Text>
             </View>
           </View>
 
@@ -285,11 +282,11 @@ export const AuditReportsScreen: React.FC = () => {
           </View>
 
           <Text style={styles.bleedDescription}>
-            Entertainment console maintains continuous 18W idle. Tightening vacant cutoff threshold from 15m to 10m saves ~$2.30/mo.
+            Entertainment console maintains continuous 18W idle. Tightening vacant cutoff threshold from 15m to 10m saves ~₱135.00/mo.
           </Text>
 
           <View style={styles.bleedActionRow}>
-            <Text style={styles.savingsEstimate}>Estimated savings: $2.30/mo</Text>
+            <Text style={styles.savingsEstimate}>Estimated savings: ₱135.00/mo</Text>
             <TouchableOpacity
               style={[styles.applyRuleBtn, ruleApplied && styles.applyRuleBtnDone]}
               onPress={applyStandbyRule}
@@ -344,9 +341,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -366,9 +363,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   calendarBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -393,7 +390,7 @@ const styles = StyleSheet.create({
   },
   monthSub: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#4B5563',
     marginTop: 2,
   },
   monthlyDropdown: {
@@ -423,8 +420,8 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   filterPillActive: {
-    backgroundColor: '#84CC16', // Lime green active pill
-    borderColor: '#84CC16',
+    backgroundColor: '#00C853',
+    borderColor: '#00C853',
   },
   filterPillText: {
     fontSize: 12,
@@ -437,9 +434,9 @@ const styles = StyleSheet.create({
   },
   consumptionCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 14,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
   },
@@ -493,7 +490,7 @@ const styles = StyleSheet.create({
   statTile: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -513,7 +510,7 @@ const styles = StyleSheet.create({
   tileLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#4B5563',
     marginBottom: 4,
   },
   tileMainVal: {
@@ -528,7 +525,7 @@ const styles = StyleSheet.create({
   },
   tileSubVal: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: '#6B7280',
     marginTop: 2,
   },
   tileReclaimed: {
@@ -564,7 +561,7 @@ const styles = StyleSheet.create({
   },
   hardwareCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -605,8 +602,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#00C853',
   },
   hwDetails: {
-    fontSize: 10,
-    color: '#9CA3AF',
+    fontSize: 11,
+    color: '#6B7280',
     marginTop: 2,
   },
   hwRight: {
@@ -618,8 +615,8 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   hwBilled: {
-    fontSize: 10,
-    color: '#6B7280',
+    fontSize: 11,
+    color: '#4B5563',
     marginTop: 2,
   },
   shareLine: {
@@ -629,8 +626,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   shareLabel: {
-    fontSize: 10,
-    color: '#6B7280',
+    fontSize: 11,
+    color: '#4B5563',
     fontWeight: '600',
   },
   shareVal: {
@@ -659,12 +656,12 @@ const styles = StyleSheet.create({
   },
   hwBottomText: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#4B5563',
     fontWeight: '500',
   },
   bleedCard: {
     backgroundColor: '#FFFBEB',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,

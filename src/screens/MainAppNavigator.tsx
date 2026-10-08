@@ -1,10 +1,10 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useHems } from '../context/HemsContext';
 import { LiveDashboardScreen } from './LiveDashboardScreen';
 import { RoomsSmartPlugsScreen } from './RoomsSmartPlugsScreen';
 import { ConsumptionAnalyticsScreen } from './ConsumptionAnalyticsScreen';
-import { AuditReportsScreen } from './AuditReportsScreen';
+import { AlertsScreen } from './AlertsScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { BottomNavBar } from '../components/BottomNavBar';
 import Animated, {
@@ -35,13 +35,13 @@ export const MainAppNavigator: React.FC = () => {
     switch (activeTab) {
       case 'home':
         return <LiveDashboardScreen />;
-      case 'rooms':
-        return <RoomsSmartPlugsScreen />;
-      case 'analytics':
+      case 'usage':
         return <ConsumptionAnalyticsScreen />;
-      case 'reports':
-        return <AuditReportsScreen />;
-      case 'profile':
+      case 'appliances':
+        return <RoomsSmartPlugsScreen />;
+      case 'alerts':
+        return <AlertsScreen />;
+      case 'settings':
         return <ProfileScreen />;
       default:
         return <LiveDashboardScreen />;

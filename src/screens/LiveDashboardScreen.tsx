@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -12,15 +12,8 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHems } from '../context/HemsContext';
 import { RadialGauge } from '../components/RadialGauge';
-import { AnimatedNumber } from '../components/AnimatedNumber';
 import { PressableScale } from '../components/PressableScale';
 import { SystemMode } from '../types/hems';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
 
 export const LiveDashboardScreen: React.FC = () => {
   const {
@@ -49,24 +42,6 @@ export const LiveDashboardScreen: React.FC = () => {
 
   const modes: SystemMode[] = ['Auto', 'Eco', 'Manual'];
 
-  // Progress bar animation for daily energy consumption
-  const dailyTargetKwh = 10;
-  const progressRatio = Math.min(todayTotalKwh / dailyTargetKwh, 1);
-  const progressWidth = useSharedValue(0);
-
-  useEffect(() => {
-    progressWidth.set(
-      withTiming(progressRatio, {
-        duration: 500,
-        easing: Easing.bezier(0.23, 1, 0.32, 1),
-      })
-    );
-  }, [progressRatio]);
-
-  const progressStyle = useAnimatedStyle(() => ({
-    width: `${progressWidth.get() * 100}%`,
-  }));
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
@@ -87,16 +62,13 @@ export const LiveDashboardScreen: React.FC = () => {
         </View>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton}>
-            <MaterialCommunityIcons name="bell-outline" size={20} color="#4B5563" />
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => setActiveTab('profile')}
+            onPress={() => setActiveTab('settings')}
             accessibilityRole="button"
-            accessibilityLabel="View Profile"
+            accessibilityLabel="Settings"
           >
-            <MaterialCommunityIcons name="account-outline" size={20} color="#4B5563" />
+            <MaterialCommunityIcons name="cog-outline" size={20} color="#4B5563" />
           </TouchableOpacity>
         </View>
       </View>
@@ -115,42 +87,7 @@ export const LiveDashboardScreen: React.FC = () => {
           powerFactor={averagePowerFactor}
         />
 
-        {/* 2. Radar Automation Status Card */}
-        <View style={styles.radarCard}>
-          <View style={styles.radarHeader}>
-            <View style={styles.radarHeaderLeft}>
-              <MaterialCommunityIcons name="radar" size={18} color="#00C853" />
-              <Text style={styles.radarTitle}>Radar Automation</Text>
-            </View>
-            <View style={styles.activePill}>
-              <Text style={styles.activePillText}>Active</Text>
-            </View>
-          </View>
-
-          <View style={styles.radarNodesRow}>
-            {/* Room 1 */}
-            <View style={styles.radarNodeBox}>
-              <Text style={styles.radarNodeName}>Room 1 Plug</Text>
-              <View style={styles.occupiedBadge}>
-                <Text style={styles.occupiedBadgeText}>Occupied</Text>
-              </View>
-            </View>
-
-            {/* Room 2 */}
-            <View style={styles.radarNodeBox}>
-              <Text style={styles.radarNodeName}>Room 2 Plug</Text>
-              <View style={styles.vacantBadge}>
-                <Text style={styles.vacantBadgeText}>
-                  {node2.cutoffPending
-                    ? `Vacant • Off in ${Math.ceil(node2.cutoffCountdownSeconds / 60)}m`
-                    : 'Vacant • Off'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* 3. Smart Nodes Section */}
+        {/* 2. Smart Nodes Section */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Smart Nodes</Text>
           <Text style={styles.sectionSub}>2 Monitored</Text>
@@ -163,23 +100,24 @@ export const LiveDashboardScreen: React.FC = () => {
               <MaterialCommunityIcons name="power-socket-eu" size={20} color="#00C853" />
             </View>
             <View>
-              <View style={styles.nodeTitleLine}>
-                <Text style={styles.nodeName}>Room 1 Plug</Text>
-                <View style={styles.miniOccupiedBadge}>
-                  <Text style={styles.miniBadgeText}>Occupied</Text>
-                </View>
-              </View>
+              <Text style={styles.nodeName}>Room 1 Plug</Text>
               <Text style={styles.nodeSubMetrics}>
                 {node1.relayState ? `${node1.activePowerWatts} W` : '0 W'} • ~{node1.voltage.toFixed(0)}V
               </Text>
             </View>
           </View>
-          <Switch
-            value={node1.relayState}
-            onValueChange={() => toggleNodeRelay('node-1')}
-            trackColor={{ false: '#E5E7EB', true: '#00C853' }}
-            thumbColor="#FFFFFF"
-          />
+          <View style={styles.switchWrap}>
+            <Text style={[styles.switchLabel, node1.relayState && styles.switchLabelActive]}>
+              {node1.relayState ? 'ON' : 'OFF'}
+            </Text>
+            <Switch
+              value={node1.relayState}
+              onValueChange={() => toggleNodeRelay('node-1')}
+              trackColor={{ false: '#E5E7EB', true: '#00C853' }}
+              thumbColor="#FFFFFF"
+              accessibilityLabel={`Room 1 Plug power switch, currently ${node1.relayState ? 'on' : 'off'}`}
+            />
+          </View>
         </View>
 
         {/* Room 2 Plug Row */}
@@ -189,34 +127,27 @@ export const LiveDashboardScreen: React.FC = () => {
               <MaterialCommunityIcons name="power-socket-eu" size={20} color="#F59E0B" />
             </View>
             <View>
-              <View style={styles.nodeTitleLine}>
-                <Text style={styles.nodeName}>Room 2 Plug</Text>
-                {node2.cutoffPending ? (
-                  <View style={styles.miniCutoffBadge}>
-                    <Text style={styles.miniCutoffText}>
-                      Cutoff in {formatCountdown(node2.cutoffCountdownSeconds)}
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.miniVacantBadge}>
-                    <Text style={styles.miniVacantText}>Vacant</Text>
-                  </View>
-                )}
-              </View>
+              <Text style={styles.nodeName}>Room 2 Plug</Text>
               <Text style={styles.nodeSubMetrics}>
                 {node2.relayState ? `${node2.activePowerWatts} W` : '0 W'} • Vacant
               </Text>
             </View>
           </View>
-          <Switch
-            value={node2.relayState}
-            onValueChange={() => toggleNodeRelay('node-2')}
-            trackColor={{ false: '#E5E7EB', true: '#F59E0B' }}
-            thumbColor="#FFFFFF"
-          />
+          <View style={styles.switchWrap}>
+            <Text style={[styles.switchLabel, node2.relayState && styles.switchLabelActive]}>
+              {node2.relayState ? 'ON' : 'OFF'}
+            </Text>
+            <Switch
+              value={node2.relayState}
+              onValueChange={() => toggleNodeRelay('node-2')}
+              trackColor={{ false: '#E5E7EB', true: '#F59E0B' }}
+              thumbColor="#FFFFFF"
+              accessibilityLabel={`Room 2 Plug power switch, currently ${node2.relayState ? 'on' : 'off'}`}
+            />
+          </View>
         </View>
 
-        {/* 4. Today's Summary Card */}
+        {/* 3. Today's Summary Card */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
             <Text style={styles.summaryTitle}>Today's Summary</Text>
@@ -230,12 +161,10 @@ export const LiveDashboardScreen: React.FC = () => {
               <Text style={styles.summaryLabel}>Total Energy</Text>
               <Text style={styles.summaryVal}>{todayTotalKwh} <Text style={styles.summaryUnit}>kWh</Text></Text>
             </View>
-            <View style={styles.summaryDivider} />
             <View style={styles.summaryCol}>
               <Text style={styles.summaryLabel}>Est. Cost</Text>
-              <Text style={styles.summaryVal}>${todayEstimatedCost}</Text>
+              <Text style={styles.summaryVal}>₱{todayEstimatedCost.toFixed(2)}</Text>
             </View>
-            <View style={styles.summaryDivider} />
             <View style={styles.summaryCol}>
               <Text style={styles.summaryLabel}>Saved Draw</Text>
               <Text style={[styles.summaryVal, { color: '#00C853' }]}>
@@ -245,20 +174,7 @@ export const LiveDashboardScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* 5. Daily Energy Progress Bar */}
-        <View style={styles.progressCard}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressTitle}>Daily Energy Target</Text>
-            <Text style={styles.progressValue}>
-              {todayTotalKwh.toFixed(1)} / {dailyTargetKwh} kWh
-            </Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <Animated.View style={[styles.progressFill, progressStyle]} />
-          </View>
-        </View>
-
-        {/* 6. System Mode Selector Pills */}
+        {/* 5. System Mode Selector Pills */}
         <View style={styles.modesRow}>
           {modes.map((m) => {
             const isSelected = systemMode === m;
@@ -333,7 +249,7 @@ const styles = StyleSheet.create({
   },
   brandSubtitle: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#4B5563',
     fontWeight: '500',
   },
   headerRight: {
@@ -341,9 +257,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -355,81 +271,7 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 30,
   },
-  radarCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  radarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  radarHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  radarTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  activePill: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  activePillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#00C853',
-  },
-  radarNodesRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  radarNodeBox: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 14,
-    padding: 10,
-  },
-  radarNodeName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#4B5563',
-    marginBottom: 4,
-  },
-  occupiedBadge: {
-    backgroundColor: '#E8F5E9',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  occupiedBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#00C853',
-  },
-  vacantBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  vacantBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#D97706',
-  },
+
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -445,7 +287,7 @@ const styles = StyleSheet.create({
   },
   sectionSub: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#4B5563',
     fontWeight: '500',
   },
   nodeItemCard: {
@@ -453,11 +295,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   nodeItemLeft: {
     flexDirection: 'row',
@@ -472,62 +319,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nodeTitleLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
   nodeName: {
     fontSize: 14,
     fontWeight: '700',
     color: '#111827',
   },
-  miniOccupiedBadge: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  miniBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#00C853',
-  },
-  miniCutoffBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  miniCutoffText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#D97706',
-  },
-  miniVacantBadge: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  miniVacantText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
+
   nodeSubMetrics: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#4B5563',
     marginTop: 2,
+  },
+  switchWrap: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  switchLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B7280',
+  },
+  switchLabelActive: {
+    color: '#00C853',
   },
   summaryCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    marginTop: 8,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -544,7 +370,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F5E9',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   ecoSavedText: {
     fontSize: 11,
@@ -561,9 +387,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: '#6B7280',
     marginBottom: 4,
   },
   summaryVal: {
@@ -574,13 +400,9 @@ const styles = StyleSheet.create({
   summaryUnit: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#4B5563',
   },
-  summaryDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#E5E7EB',
-  },
+
   modesRow: {
     flexDirection: 'row',
     gap: 10,
@@ -609,39 +431,5 @@ const styles = StyleSheet.create({
   modeButtonTextActive: {
     color: '#FFFFFF',
   },
-  progressCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  progressTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  progressValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  progressTrack: {
-    height: 8,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#00C853',
-    borderRadius: 4,
-  },
+
 });

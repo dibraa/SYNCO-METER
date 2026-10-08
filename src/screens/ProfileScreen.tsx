@@ -190,12 +190,10 @@ export const ProfileScreen: React.FC = () => {
                 <Text style={styles.statValue}>{todayTotalKwh}</Text>
                 <Text style={styles.statLabel}>kWh Used</Text>
               </View>
-              <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>${todayEstimatedCost}</Text>
+                <Text style={styles.statValue}>₱{todayEstimatedCost.toFixed(2)}</Text>
                 <Text style={styles.statLabel}>Est. Cost</Text>
               </View>
-              <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, { color: '#00C853' }]}>
                   {todaySavedKwh}
@@ -278,7 +276,7 @@ export const ProfileScreen: React.FC = () => {
             />
             <View style={styles.rowDivider} />
             <SettingRow
-              icon="currency-usd"
+              icon="currency-php"
               iconColor="#F59E0B"
               label="Tariff Rate"
               value="12.00 PHP/kWh"
@@ -499,9 +497,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -526,7 +524,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
@@ -571,16 +569,16 @@ const styles = StyleSheet.create({
     color: '#00C853',
   },
   editButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   statsCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
@@ -611,14 +609,10 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 2,
   },
-  statDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: '#E5E7EB',
-  },
+
   sectionCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -703,8 +697,8 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 16,
+    padding: 20,
     width: '100%',
     maxWidth: 400,
   },

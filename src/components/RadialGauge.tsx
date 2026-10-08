@@ -154,14 +154,9 @@ export const RadialGauge: React.FC<RadialGaugeProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
     borderWidth: 1,
     borderColor: '#F3F4F6',
   },
@@ -169,26 +164,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#111827',
   },
   subtitle: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#4B5563',
     marginTop: 2,
   },
   dropdownPill: {
     backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   dropdownText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#4B5563',
   },
@@ -207,7 +202,7 @@ const styles = StyleSheet.create({
   readoutLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#4B5563',
     marginBottom: 2,
   },
   wattsRow: {
@@ -216,21 +211,21 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   wattsValue: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '900',
     color: '#111827',
     letterSpacing: -0.5,
   },
   wattsUnit: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#00C853',
   },
   kwBadge: {
     backgroundColor: '#E8F5E9',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
     marginTop: 4,
   },
   kwBadgeText: {
@@ -247,7 +242,7 @@ const styles = StyleSheet.create({
   scaleText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: '#6B7280',
   },
   metricsRow: {
     flexDirection: 'row',
@@ -263,9 +258,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   metricLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#9CA3AF',
+    color: '#6B7280',
     letterSpacing: 0.5,
     marginBottom: 4,
   },
@@ -277,11 +272,11 @@ const styles = StyleSheet.create({
   metricUnit: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#4B5563',
   },
   metricDivider: {
     width: 1,
-    height: 28,
+    height: 24,
     backgroundColor: '#E5E7EB',
   },
 });

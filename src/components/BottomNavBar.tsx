@@ -10,9 +10,10 @@ export const BottomNavBar: React.FC = () => {
 
   const tabs: Array<{ id: TabType; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = [
     { id: 'home', label: 'Home', icon: 'home-outline' },
-    { id: 'rooms', label: 'Rooms', icon: 'power-socket-eu' },
-    { id: 'analytics', label: 'Analytics', icon: 'chart-bar' },
-    { id: 'reports', label: 'Reports', icon: 'file-document-outline' },
+    { id: 'usage', label: 'Usage', icon: 'chart-bar' },
+    { id: 'appliances', label: 'Appliances', icon: 'power-socket-eu' },
+    { id: 'alerts', label: 'Alerts', icon: 'bell-outline' },
+    { id: 'settings', label: 'Settings', icon: 'cog-outline' },
   ];
 
   return (
@@ -74,7 +75,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: '#6B7280',
     marginTop: 3,
   },
   labelActive: {
