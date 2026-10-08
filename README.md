@@ -1,4 +1,4 @@
-# VoltPulse HEMS — IoT Smart Meter with Load Control & Standby Power Reduction
+# SYNCO METER — IoT Smart Meter with Load Control & Standby Power Reduction
 
 [![Expo SDK 57](https://img.shields.io/badge/Expo-SDK%2057-000000?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev)
 [![React Native](https://img.shields.io/badge/React_Native-0.86-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev)
@@ -6,7 +6,7 @@
 [![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Realtime-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
 [![ESP32](https://img.shields.io/badge/ESP32-PZEM--004T%20v3.0-E7352C?style=for-the-badge&logo=espressif&logoColor=white)](https://espressif.com)
 
-**VoltPulse HEMS** is an end-to-end Home Energy Management System designed to monitor AC electrical telemetry with sub-second accuracy, eliminate vampire standby power through occupancy-based automation, and provide remote/autonomous load control contactors to prevent household electrical overloads.
+**SYNCO METER** is an end-to-end Home Energy Management System designed to monitor AC electrical telemetry with sub-second accuracy, eliminate vampire standby power through occupancy-based automation, and provide remote/autonomous load control contactors to prevent household electrical overloads.
 
 ---
 
