@@ -49,9 +49,19 @@ export const AuditReportsScreen: React.FC = () => {
           <Text style={styles.headerSubtitle}>• Dual Node Active</Text>
         </View>
 
-        <TouchableOpacity style={styles.calendarBtn}>
-          <MaterialCommunityIcons name="calendar-month-outline" size={20} color="#111827" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={styles.calendarBtn}>
+            <MaterialCommunityIcons name="calendar-month-outline" size={20} color="#111827" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.calendarBtn}
+            onPress={() => setActiveTab('profile')}
+            accessibilityRole="button"
+            accessibilityLabel="View Profile"
+          >
+            <MaterialCommunityIcons name="account-outline" size={20} color="#111827" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView

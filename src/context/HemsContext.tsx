@@ -21,11 +21,15 @@ interface HemsContextType {
   todaySavedKwh: number;
   applyStandbyRule: () => void;
   ruleApplied: boolean;
+  signOut: () => void;
 }
 
 const HemsContext = createContext<HemsContextType | undefined>(undefined);
 
-export const HemsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const HemsProvider: React.FC<{
+  children: React.ReactNode;
+  onSignOut?: () => void;
+}> = ({ children, onSignOut }) => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [systemMode, setSystemMode] = useState<SystemMode>('Auto');
   const [ruleApplied, setRuleApplied] = useState(false);
@@ -227,6 +231,13 @@ export const HemsProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const todayEstimatedCost = +(todayTotalKwh * 0.15).toFixed(2);
   const todaySavedKwh = 1.85;
 
+  const signOut = () => {
+    setActiveTab('home');
+    if (onSignOut) {
+      onSignOut();
+    }
+  };
+
   return (
     <HemsContext.Provider
       value={{
@@ -249,6 +260,7 @@ export const HemsProvider: React.FC<{ children: React.ReactNode }> = ({ children
         todaySavedKwh,
         applyStandbyRule,
         ruleApplied,
+        signOut,
       }}
     >
       {children}

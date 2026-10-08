@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { useHems } from '../context/HemsContext';
 import { LiveDashboardScreen } from './LiveDashboardScreen';
@@ -7,9 +7,29 @@ import { ConsumptionAnalyticsScreen } from './ConsumptionAnalyticsScreen';
 import { AuditReportsScreen } from './AuditReportsScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { BottomNavBar } from '../components/BottomNavBar';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 
 export const MainAppNavigator: React.FC = () => {
   const { activeTab } = useHems();
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.set(
+      withTiming(1, {
+        duration: 200,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+      })
+    );
+  }, [activeTab]);
+
+  const screenStyle = useAnimatedStyle(() => ({
+    opacity: opacity.get(),
+  }));
 
   const renderScreen = () => {
     switch (activeTab) {
@@ -31,7 +51,9 @@ export const MainAppNavigator: React.FC = () => {
   return (
     <View style={styles.outerContainer}>
       <View style={styles.mobileFrame}>
-        <View style={styles.screenContainer}>{renderScreen()}</View>
+        <Animated.View style={[styles.screenContainer, screenStyle]}>
+          {renderScreen()}
+        </Animated.View>
         <BottomNavBar />
       </View>
     </View>

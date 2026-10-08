@@ -83,10 +83,11 @@ const SectionCard: React.FC<{ title: string; children: React.ReactNode }> = ({
 };
 
 export const ProfileScreen: React.FC = () => {
-  const { todayTotalKwh, todayEstimatedCost, todaySavedKwh } = useHems();
+  const { todayTotalKwh, todayEstimatedCost, todaySavedKwh, setActiveTab, signOut } = useHems();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [signOutModalVisible, setSignOutModalVisible] = useState(false);
   const [editedName, setEditedName] = useState('Juan Dela Cruz');
   const [editedEmail, setEditedEmail] = useState('juan@example.com');
   const [editedPhone, setEditedPhone] = useState('+63 912 345 6789');
@@ -112,12 +113,13 @@ export const ProfileScreen: React.FC = () => {
   }, []);
 
   const handleSignOut = () => {
-    // TODO: Implement sign out
+    setSignOutModalVisible(false);
+    signOut();
   };
 
   const handleDeleteAccount = () => {
     setDeleteModalVisible(false);
-    // TODO: Implement account deletion
+    signOut();
   };
 
   const handleSaveProfile = () => {
@@ -131,9 +133,18 @@ export const ProfileScreen: React.FC = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => setActiveTab('home')}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Home"
+        >
+          <MaterialCommunityIcons name="chevron-left" size={24} color="#111827" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle} accessibilityRole="header">
           Profile
         </Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
@@ -290,7 +301,7 @@ export const ProfileScreen: React.FC = () => {
               iconColor="#EF4444"
               label="Sign Out"
               showChevron={false}
-              onPress={handleSignOut}
+              onPress={() => setSignOutModalVisible(true)}
             />
             <View style={styles.rowDivider} />
             <SettingRow
@@ -427,6 +438,46 @@ export const ProfileScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Sign Out Confirmation Modal */}
+      <Modal
+        visible={signOutModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSignOutModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.deleteIconWrap}>
+              <MaterialCommunityIcons name="logout" size={48} color="#EF4444" />
+            </View>
+            <Text style={styles.deleteTitle}>Sign Out?</Text>
+            <Text style={styles.deleteMessage}>
+              Are you sure you want to sign out of your SYNCO METER account?
+            </Text>
+            <View style={styles.deleteActions}>
+              <TouchableOpacity
+                style={styles.deleteCancelButton}
+                onPress={() => setSignOutModalVisible(false)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={styles.deleteCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteConfirmButton}
+                onPress={handleSignOut}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm Sign Out"
+              >
+                <Text style={styles.deleteConfirmText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -437,15 +488,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSpacer: {
+    width: 36,
+  },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '800',
     color: '#111827',
   },

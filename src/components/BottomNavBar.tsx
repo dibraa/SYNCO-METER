@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TabType } from '../types/hems';
 import { useHems } from '../context/HemsContext';
+import { PressableScale } from './PressableScale';
 
 export const BottomNavBar: React.FC = () => {
   const { activeTab, setActiveTab } = useHems();
@@ -12,7 +13,6 @@ export const BottomNavBar: React.FC = () => {
     { id: 'rooms', label: 'Rooms', icon: 'power-socket-eu' },
     { id: 'analytics', label: 'Analytics', icon: 'chart-bar' },
     { id: 'reports', label: 'Reports', icon: 'file-document-outline' },
-    { id: 'profile', label: 'Profile', icon: 'account-outline' },
   ];
 
   return (
@@ -20,11 +20,11 @@ export const BottomNavBar: React.FC = () => {
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         return (
-          <TouchableOpacity
+          <PressableScale
             key={tab.id}
             style={styles.tabButton}
             onPress={() => setActiveTab(tab.id)}
-            activeOpacity={0.7}
+            scaleTo={0.95}
           >
             <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
               <MaterialCommunityIcons
@@ -36,7 +36,7 @@ export const BottomNavBar: React.FC = () => {
             <Text style={[styles.label, isActive && styles.labelActive]}>
               {tab.label}
             </Text>
-          </TouchableOpacity>
+          </PressableScale>
         );
       })}
     </View>

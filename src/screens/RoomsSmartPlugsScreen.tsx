@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -11,6 +11,14 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHems } from '../context/HemsContext';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { PressableScale } from '../components/PressableScale';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 
 export const RoomsSmartPlugsScreen: React.FC = () => {
   const {
@@ -19,6 +27,7 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
     extendCutoff,
     totalPowerWatts,
     averageVoltage,
+    setActiveTab,
   } = useHems();
 
   const node1 = nodes[0];
@@ -30,6 +39,52 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Switch feedback animation
+  const node1Scale = useSharedValue(1);
+  const node2Scale = useSharedValue(1);
+
+  useEffect(() => {
+    node1Scale.set(
+      withTiming(1.1, {
+        duration: 150,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+      })
+    );
+    setTimeout(() => {
+      node1Scale.set(
+        withTiming(1, {
+          duration: 150,
+          easing: Easing.bezier(0.23, 1, 0.32, 1),
+        })
+      );
+    }, 150);
+  }, [node1.relayState]);
+
+  useEffect(() => {
+    node2Scale.set(
+      withTiming(1.1, {
+        duration: 150,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+      })
+    );
+    setTimeout(() => {
+      node2Scale.set(
+        withTiming(1, {
+          duration: 150,
+          easing: Easing.bezier(0.23, 1, 0.32, 1),
+        })
+      );
+    }, 150);
+  }, [node2.relayState]);
+
+  const node1IconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: node1Scale.get() }],
+  }));
+
+  const node2IconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: node2Scale.get() }],
+  }));
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
@@ -38,20 +93,22 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
       <View style={styles.header}>
         <View style={styles.headerUserWrap}>
           <View style={styles.avatarCircle}>
-            <MaterialCommunityIcons name="account" size={20} color="#4B5563" />
+            <MaterialCommunityIcons name="lightning-bolt" size={20} color="#00C853" />
           </View>
           <View>
             <Text style={styles.superTitle}>SMART POWER</Text>
-            <Text style={styles.mainTitle}>VoltPulse HEMS</Text>
+            <Text style={styles.mainTitle}>SYNCO METER</Text>
           </View>
         </View>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerBtn}>
-            <MaterialCommunityIcons name="poll" size={20} color="#4B5563" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn}>
-            <MaterialCommunityIcons name="plus-circle-outline" size={20} color="#4B5563" />
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => setActiveTab('profile')}
+            accessibilityRole="button"
+            accessibilityLabel="View Profile"
+          >
+            <MaterialCommunityIcons name="account-outline" size={20} color="#4B5563" />
           </TouchableOpacity>
         </View>
       </View>
@@ -70,7 +127,7 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
             <View>
               <Text style={styles.totalLoadLabel}>Total Active Load</Text>
               <View style={styles.totalWattsRow}>
-                <Text style={styles.totalWattsVal}>{totalPowerWatts.toLocaleString()}</Text>
+                <AnimatedNumber value={totalPowerWatts} style={styles.totalWattsVal} />
                 <Text style={styles.totalWattsUnit}>W</Text>
               </View>
             </View>
@@ -89,9 +146,9 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
         <View style={styles.roomCard}>
           <View style={styles.roomCardHeader}>
             <View style={styles.roomHeaderLeft}>
-              <View style={[styles.roomIconWrap, { backgroundColor: '#E8F5E9' }]}>
+              <Animated.View style={[styles.roomIconWrap, { backgroundColor: '#E8F5E9' }, node1IconStyle]}>
                 <MaterialCommunityIcons name="sofa-outline" size={22} color="#00C853" />
-              </View>
+              </Animated.View>
               <View>
                 <Text style={styles.roomName}>Room 1</Text>
                 <Text style={styles.roomSub}>Living Room Plug</Text>
@@ -108,9 +165,10 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
             <View style={styles.metricBlock}>
               <Text style={styles.metricLabel}>Active Draw</Text>
               <View style={styles.metricValRow}>
-                <Text style={styles.metricNumber}>
-                  {node1.relayState ? node1.activePowerWatts : 0}
-                </Text>
+                <AnimatedNumber
+                  value={node1.relayState ? node1.activePowerWatts : 0}
+                  style={styles.metricNumber}
+                />
                 <Text style={styles.metricUnit}>W</Text>
               </View>
             </View>
@@ -153,9 +211,9 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
         <View style={styles.roomCard}>
           <View style={styles.roomCardHeader}>
             <View style={styles.roomHeaderLeft}>
-              <View style={[styles.roomIconWrap, { backgroundColor: '#FFEDD5' }]}>
+              <Animated.View style={[styles.roomIconWrap, { backgroundColor: '#FFEDD5' }, node2IconStyle]}>
                 <MaterialCommunityIcons name="bed-outline" size={22} color="#EA580C" />
-              </View>
+              </Animated.View>
               <View>
                 <Text style={styles.roomName}>Room 2</Text>
                 <Text style={styles.roomSub}>Bedroom Plug</Text>
@@ -188,9 +246,10 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
             <View style={styles.metricBlock}>
               <Text style={styles.metricLabel}>Active Draw</Text>
               <View style={styles.metricValRow}>
-                <Text style={styles.metricNumber}>
-                  {node2.relayState ? node2.activePowerWatts : 0}
-                </Text>
+                <AnimatedNumber
+                  value={node2.relayState ? node2.activePowerWatts : 0}
+                  style={styles.metricNumber}
+                />
                 <Text style={styles.metricUnit}>W</Text>
               </View>
             </View>
@@ -234,25 +293,24 @@ export const RoomsSmartPlugsScreen: React.FC = () => {
 
           {/* Keep ON for 30m Button */}
           {node2.cutoffPending && (
-            <TouchableOpacity
+            <PressableScale
               style={styles.keepOnButton}
               onPress={() => extendCutoff('node-2', 30)}
-              activeOpacity={0.8}
             >
               <MaterialCommunityIcons name="clock-fast" size={16} color="#00C853" />
               <Text style={styles.keepOnText}>Keep ON for 30m</Text>
-            </TouchableOpacity>
+            </PressableScale>
           )}
         </View>
 
         {/* Automation Settings Navigation */}
-        <TouchableOpacity style={styles.automationSettingsBtn} activeOpacity={0.8}>
+        <PressableScale style={styles.automationSettingsBtn}>
           <View style={styles.autoSettingsLeft}>
             <MaterialCommunityIcons name="tune-vertical" size={20} color="#111827" />
             <Text style={styles.autoSettingsTitle}>Automation Settings</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
+        </PressableScale>
       </ScrollView>
     </SafeAreaView>
   );
@@ -283,7 +341,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
   },

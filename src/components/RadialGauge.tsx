@@ -1,6 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 
 interface RadialGaugeProps {
   watts: number;
@@ -22,6 +28,22 @@ export const RadialGauge: React.FC<RadialGaugeProps> = ({
   const radius = 100;
   const cx = size / 2;
   const cy = 135;
+
+  // Fade-in animation on mount
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.set(
+      withTiming(1, {
+        duration: 500,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+      })
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.get(),
+  }));
 
   // Semicircle from -180 deg (left) to 0 deg (right)
   const clampedWatts = Math.min(Math.max(0, watts), maxWatts);
@@ -48,7 +70,7 @@ export const RadialGauge: React.FC<RadialGaugeProps> = ({
   const kwCurrent = (watts / 1000).toFixed(2);
 
   return (
-    <View style={styles.card}>
+    <Animated.View style={[styles.card, animatedStyle]}>
       {/* Header */}
       <View style={styles.headerRow}>
         <View>
@@ -125,7 +147,7 @@ export const RadialGauge: React.FC<RadialGaugeProps> = ({
           </Text>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 };
 

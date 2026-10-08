@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -12,7 +12,15 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useHems } from '../context/HemsContext';
 import { RadialGauge } from '../components/RadialGauge';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { PressableScale } from '../components/PressableScale';
 import { SystemMode } from '../types/hems';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 
 export const LiveDashboardScreen: React.FC = () => {
   const {
@@ -27,6 +35,7 @@ export const LiveDashboardScreen: React.FC = () => {
     todaySavedKwh,
     systemMode,
     setSystemMode,
+    setActiveTab,
   } = useHems();
 
   const node1 = nodes[0];
@@ -40,6 +49,24 @@ export const LiveDashboardScreen: React.FC = () => {
 
   const modes: SystemMode[] = ['Auto', 'Eco', 'Manual'];
 
+  // Progress bar animation for daily energy consumption
+  const dailyTargetKwh = 10;
+  const progressRatio = Math.min(todayTotalKwh / dailyTargetKwh, 1);
+  const progressWidth = useSharedValue(0);
+
+  useEffect(() => {
+    progressWidth.set(
+      withTiming(progressRatio, {
+        duration: 500,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+      })
+    );
+  }, [progressRatio]);
+
+  const progressStyle = useAnimatedStyle(() => ({
+    width: `${progressWidth.get() * 100}%`,
+  }));
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
@@ -51,7 +78,7 @@ export const LiveDashboardScreen: React.FC = () => {
             <MaterialCommunityIcons name="lightning-bolt" size={20} color="#00C853" />
           </View>
           <View>
-            <Text style={styles.brandTitle}>VoltPulse HEMS</Text>
+            <Text style={styles.brandTitle}>SYNCO METER</Text>
             <View style={styles.statusRow}>
               <View style={styles.onlineDot} />
               <Text style={styles.brandSubtitle}>Grid Connected • 2 Nodes</Text>
@@ -63,7 +90,12 @@ export const LiveDashboardScreen: React.FC = () => {
           <TouchableOpacity style={styles.iconButton}>
             <MaterialCommunityIcons name="bell-outline" size={20} color="#4B5563" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => setActiveTab('profile')}
+            accessibilityRole="button"
+            accessibilityLabel="View Profile"
+          >
             <MaterialCommunityIcons name="account-outline" size={20} color="#4B5563" />
           </TouchableOpacity>
         </View>
@@ -213,16 +245,28 @@ export const LiveDashboardScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* 5. System Mode Selector Pills */}
+        {/* 5. Daily Energy Progress Bar */}
+        <View style={styles.progressCard}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressTitle}>Daily Energy Target</Text>
+            <Text style={styles.progressValue}>
+              {todayTotalKwh.toFixed(1)} / {dailyTargetKwh} kWh
+            </Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <Animated.View style={[styles.progressFill, progressStyle]} />
+          </View>
+        </View>
+
+        {/* 6. System Mode Selector Pills */}
         <View style={styles.modesRow}>
           {modes.map((m) => {
             const isSelected = systemMode === m;
             return (
-              <TouchableOpacity
+              <PressableScale
                 key={m}
                 style={[styles.modeButton, isSelected && styles.modeButtonActive]}
                 onPress={() => setSystemMode(m)}
-                activeOpacity={0.8}
               >
                 <MaterialCommunityIcons
                   name={m === 'Auto' ? 'flash-auto' : m === 'Eco' ? 'leaf' : 'tune'}
@@ -232,7 +276,7 @@ export const LiveDashboardScreen: React.FC = () => {
                 <Text style={[styles.modeButtonText, isSelected && styles.modeButtonTextActive]}>
                   {m}
                 </Text>
-              </TouchableOpacity>
+              </PressableScale>
             );
           })}
         </View>
@@ -564,5 +608,40 @@ const styles = StyleSheet.create({
   },
   modeButtonTextActive: {
     color: '#FFFFFF',
+  },
+  progressCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  progressTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  progressValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  progressTrack: {
+    height: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#00C853',
+    borderRadius: 4,
   },
 });

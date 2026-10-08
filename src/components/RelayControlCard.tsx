@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { PressableScale } from './PressableScale';
 
 interface RelayControlCardProps {
   relayState: boolean;
@@ -74,14 +75,13 @@ export const RelayControlCard: React.FC<RelayControlCardProps> = ({
         </View>
 
         {/* Tactile Big Power Button */}
-        <TouchableOpacity
+        <PressableScale
           style={[
             styles.switchButton,
             relayState ? styles.buttonActive : styles.buttonInactive,
           ]}
           onPress={handlePress}
-          disabled={loading}
-          activeOpacity={0.8}
+          scaleTo={0.95}
         >
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -102,7 +102,7 @@ export const RelayControlCard: React.FC<RelayControlCardProps> = ({
               </Text>
             </>
           )}
-        </TouchableOpacity>
+        </PressableScale>
       </View>
     </View>
   );

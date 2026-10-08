@@ -18,6 +18,7 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
     report,
     dailyLogs,
     hourlyDistribution,
+    setActiveTab,
   } = useHems();
 
   const [filterPeriod, setFilterPeriod] = useState<'day' | 'month'>('day');
@@ -36,7 +37,7 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
             <MaterialCommunityIcons name="lightning-bolt" size={20} color="#111827" />
           </View>
           <View>
-            <Text style={styles.brandTitle}>VoltPulse HEMS</Text>
+            <Text style={styles.brandTitle}>SYNCO METER</Text>
             <Text style={styles.brandSubtitle}>• 2 Nodes Active</Text>
           </View>
         </View>
@@ -45,7 +46,12 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
           <TouchableOpacity style={styles.iconButton}>
             <MaterialCommunityIcons name="bell-outline" size={20} color="#4B5563" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => setActiveTab('profile')}
+            accessibilityRole="button"
+            accessibilityLabel="View Profile"
+          >
             <MaterialCommunityIcons name="account-outline" size={20} color="#4B5563" />
           </TouchableOpacity>
         </View>
