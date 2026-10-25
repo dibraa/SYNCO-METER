@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { SmartNode, TabType, SystemMode, HemsReport, DailyLog, HourlyDistribution } from '../types/hems';
+import { createConsumptionSnapshot, RoomConsumption } from '../utils/consumption';
 
 interface HemsContextType {
+  consumptionRooms: RoomConsumption[];
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   systemMode: SystemMode;
@@ -91,6 +93,8 @@ export const HemsProvider: React.FC<{
       autoTrips: 35,
     },
   ]);
+
+  const [consumptionRooms] = useState(() => createConsumptionSnapshot(nodes));
 
   const [report] = useState<HemsReport>({
     month: 'February 2025',
@@ -249,6 +253,7 @@ export const HemsProvider: React.FC<{
   return (
     <HemsContext.Provider
       value={{
+        consumptionRooms,
         activeTab,
         setActiveTab,
         systemMode,

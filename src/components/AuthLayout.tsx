@@ -5,8 +5,8 @@ import {
   StyleSheet,
   Animated,
   Easing,
+  Image,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 
 interface AuthLayoutProps {
@@ -108,9 +108,12 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
         <View style={styles.brandContent}>
           {/* Logo */}
           <View style={styles.logoRow}>
-            <View style={styles.logoCircle}>
-              <MaterialCommunityIcons name="lightning-bolt" size={22} color="#00C853" />
-            </View>
+            <Image
+              source={require('../../assets/LOGO.jpg')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+              accessibilityLabel="SYNCO METER Logo"
+            />
             <Text style={styles.brandTitle}>SYNCO METER</Text>
           </View>
           <Text style={styles.brandSubtitle}>IoT Energy & Load Management</Text>
@@ -198,13 +201,10 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 4,
   },
-  logoCircle: {
+  brandLogo: {
     width: 32,
     height: 32,
-    borderRadius: 10,
-    backgroundColor: '#E8F5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 8,
   },
   brandTitle: {
     fontSize: 20,

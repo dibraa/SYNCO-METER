@@ -1,43 +1,56 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { TabType } from '../types/hems';
 import { useHems } from '../context/HemsContext';
-import { PressableScale } from './PressableScale';
+import { TabType } from '../types/hems';
+import { colors } from '../theme/theme';
+import { getActiveAlerts } from '../utils/alerts';
 
-export const BottomNavBar: React.FC = () => {
-  const { activeTab, setActiveTab } = useHems();
+const tabs: { id: TabType; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
+  { id: 'home', label: 'Home', icon: 'home-outline' },
+  { id: 'usage', label: 'Usage', icon: 'chart-bar' },
+  { id: 'appliances', label: 'Appliances', icon: 'power-socket-eu' },
+  { id: 'alerts', label: 'Alerts', icon: 'bell-outline' },
+  { id: 'settings', label: 'Settings', icon: 'cog-outline' },
+];
 
-  const tabs: Array<{ id: TabType; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = [
-    { id: 'home', label: 'Home', icon: 'home-outline' },
-    { id: 'usage', label: 'Usage', icon: 'chart-bar' },
-    { id: 'appliances', label: 'Appliances', icon: 'power-socket-eu' },
-    { id: 'alerts', label: 'Alerts', icon: 'bell-outline' },
-    { id: 'settings', label: 'Settings', icon: 'cog-outline' },
-  ];
+export const BottomNavBar = () => {
+  const { activeTab, setActiveTab, nodes, totalPowerWatts } = useHems();
+  const alertCount = getActiveAlerts(nodes, totalPowerWatts).length;
 
   return (
-    <View style={styles.container}>
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.id;
+    <View style={styles.bar}>
+      {tabs.map(tab => {
+        const isAlertTab = tab.id === 'alerts';
+        const isSelected = activeTab === tab.id;
+        const showAlertBadge = isAlertTab && alertCount > 0;
+
         return (
-          <PressableScale
+          <Pressable
             key={tab.id}
-            style={styles.tabButton}
+            accessibilityRole="tab"
+            accessibilityLabel={showAlertBadge ? `${tab.label}, ${alertCount} notifications` : tab.label}
+            accessibilityState={{ selected: isSelected }}
+            aria-selected={isSelected}
             onPress={() => setActiveTab(tab.id)}
-            scaleTo={0.95}
+            style={styles.tab}
           >
-            <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
+            <View style={[styles.icon, isSelected && styles.active]}>
               <MaterialCommunityIcons
                 name={tab.icon}
                 size={22}
-                color={isActive ? '#00C853' : '#9CA3AF'}
+                color={isSelected ? colors.green : colors.muted}
               />
+              {showAlertBadge && (
+                <View style={styles.badge} accessibilityLabel={`${alertCount} notifications`}>
+                  <Text style={styles.badgeText}>{alertCount > 99 ? '99+' : alertCount}</Text>
+                </View>
+              )}
             </View>
-            <Text style={[styles.label, isActive && styles.labelActive]}>
+            <Text style={[styles.label, isSelected && { color: colors.green, fontWeight: '700' }]}>
               {tab.label}
             </Text>
-          </PressableScale>
+          </Pressable>
         );
       })}
     </View>
@@ -45,41 +58,30 @@ export const BottomNavBar: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingVertical: 10,
-    paddingBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  tabButton: {
+  bar: { flexDirection: 'row', paddingVertical: 8, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  tab: { flex: 1, minHeight: 52, paddingHorizontal: 2, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  icon: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 12, position: 'relative' },
+  active: { backgroundColor: colors.greenSoft },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
   },
-  iconWrap: {
-    padding: 4,
-    borderRadius: 12,
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
-  iconWrapActive: {
-    backgroundColor: '#E8F5E9',
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 3,
-  },
-  labelActive: {
-    color: '#00C853',
-    fontWeight: '700',
-  },
+  label: { color: colors.muted, fontSize: 11, textAlign: 'center', maxWidth: '100%', flexShrink: 1 },
 });

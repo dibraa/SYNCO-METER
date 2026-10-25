@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
+  Image,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTelemetry } from '../context/TelemetryContext';
@@ -44,7 +45,12 @@ export const DashboardScreen: React.FC = () => {
       <View style={styles.topBar}>
         <View>
           <View style={styles.brandRow}>
-            <MaterialCommunityIcons name="lightning-bolt-circle" size={24} color="#38BDF8" />
+            <Image
+              source={require('../../assets/LOGO.jpg')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+              accessibilityLabel="SYNCO METER Logo"
+            />
             <Text style={styles.brandTitle}>SYNCO METER</Text>
           </View>
           <Text style={styles.brandSubtitle}>IoT Energy & Load Management</Text>
@@ -186,6 +192,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  brandLogo: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
   },
   brandTitle: {
     fontSize: 18,
