@@ -1,3 +1,4 @@
+/* global __dirname */
 /**
  * Standalone Telemetry Feeder (Simulated ESP32 + PZEM-004T)
  * Can be run via: `node src/mock/standaloneFeeder.js`
@@ -8,12 +9,37 @@
  */
 
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
-// Default Config
+// Auto-load environment variables from .env or .env.local
+function loadEnv() {
+  const envFiles = ['.env', '.env.local'];
+  for (const file of envFiles) {
+    const fullPath = path.resolve(__dirname, '../../', file);
+    if (fs.existsSync(fullPath)) {
+      const content = fs.readFileSync(fullPath, 'utf8');
+      content.split('\n').forEach((line) => {
+        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+        if (match) {
+          const key = match[1];
+          let value = (match[2] || '').trim();
+          value = value.replace(/^['"](.*)['"]$/, '$1');
+          if (!process.env[key] && value) {
+            process.env[key] = value;
+          }
+        }
+      });
+    }
+  }
+}
+loadEnv();
+
+// Configuration
 const CONFIG = {
-  deviceId: process.env.DEVICE_ID || 'ESP32-PZEM-01',
-  supabaseUrl: process.env.SUPABASE_URL || '',
-  supabaseKey: process.env.SUPABASE_ANON_KEY || '',
+  deviceId: process.env.DEVICE_ID || process.env.EXPO_PUBLIC_DEVICE_ID || 'ESP32-PZEM-DEV-01',
+  supabaseUrl: process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || '',
+  supabaseKey: process.env.SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
   intervalMs: 2000,
   nominalVoltage: 220.0,
   nominalFrequency: 60.0,
@@ -22,6 +48,7 @@ const CONFIG = {
 let cumulativeEnergyKwh = 15.42;
 let relayState = true;
 let currentAppliance = 'AIR_CONDITIONER'; // 'STANDBY', 'REFRIGERATOR', 'AIR_CONDITIONER', 'WATER_HEATER'
+let resolvedDeviceUuid = null;
 
 const PROFILES = {
   STANDBY: { current: 0.08, pf: 0.65 },
@@ -37,7 +64,6 @@ function generateReading() {
 
   if (!relayState) {
     return {
-      device_id: CONFIG.deviceId,
       voltage,
       current: 0.0,
       power: 0.0,
@@ -60,7 +86,6 @@ function generateReading() {
   cumulativeEnergyKwh += kwhDelta;
 
   return {
-    device_id: CONFIG.deviceId,
     voltage,
     current,
     power,
@@ -72,44 +97,128 @@ function generateReading() {
   };
 }
 
+// Request helper
+function makeRequest(url, options, bodyData) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode, body: data });
+      });
+    });
+    req.on('error', (err) => reject(err));
+    if (bodyData) {
+      req.write(bodyData);
+    }
+    req.end();
+  });
+}
+
+// Resolve device UUID from Supabase devices table
+async function resolveOrCreateDeviceUuid() {
+  if (resolvedDeviceUuid) return resolvedDeviceUuid;
+  if (!CONFIG.supabaseUrl || !CONFIG.supabaseKey) return null;
+
+  try {
+    const queryUrl = new URL(
+      `/rest/v1/devices?device_id_str=eq.${encodeURIComponent(CONFIG.deviceId)}&select=id`,
+      CONFIG.supabaseUrl
+    );
+
+    const res = await makeRequest(queryUrl, {
+      method: 'GET',
+      headers: {
+        apikey: CONFIG.supabaseKey,
+        Authorization: `Bearer ${CONFIG.supabaseKey}`,
+      },
+    });
+
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      const records = JSON.parse(res.body || '[]');
+      if (records.length > 0) {
+        resolvedDeviceUuid = records[0].id;
+        return resolvedDeviceUuid;
+      }
+    }
+
+    // If device row not present, insert it
+    const insertUrl = new URL('/rest/v1/devices', CONFIG.supabaseUrl);
+    const createRes = await makeRequest(
+      insertUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: CONFIG.supabaseKey,
+          Authorization: `Bearer ${CONFIG.supabaseKey}`,
+          Prefer: 'return=representation',
+        },
+      },
+      JSON.stringify({
+        device_id_str: CONFIG.deviceId,
+        name: 'Main Smart Meter',
+        relay_state: true,
+        overload_limit_watts: 3000.0,
+        tariff_rate_kwh: 12.0,
+      })
+    );
+
+    if (createRes.statusCode >= 200 && createRes.statusCode < 300) {
+      const created = JSON.parse(createRes.body || '[]');
+      if (created.length > 0) {
+        resolvedDeviceUuid = created[0].id;
+        return resolvedDeviceUuid;
+      }
+    }
+  } catch (e) {
+    console.warn('  ↳ [Notice] Could not resolve device UUID in Supabase:', e.message);
+  }
+
+  return null;
+}
+
 async function sendToSupabase(payload) {
   if (!CONFIG.supabaseUrl || !CONFIG.supabaseKey) {
     return false;
   }
 
-  const endpoint = new URL('/rest/v1/energy_readings', CONFIG.supabaseUrl);
-  const body = JSON.stringify(payload);
+  const deviceUuid = await resolveOrCreateDeviceUuid();
+  const dbPayload = {
+    ...payload,
+    ...(deviceUuid ? { device_id: deviceUuid } : {}),
+  };
 
-  return new Promise((resolve, reject) => {
-    const req = https.request(
+  const endpoint = new URL('/rest/v1/energy_readings', CONFIG.supabaseUrl);
+  const body = JSON.stringify(dbPayload);
+
+  try {
+    const res = await makeRequest(
       endpoint,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': CONFIG.supabaseKey,
-          'Authorization': `Bearer ${CONFIG.supabaseKey}`,
-          'Prefer': 'return=minimal',
+          apikey: CONFIG.supabaseKey,
+          Authorization: `Bearer ${CONFIG.supabaseKey}`,
+          Prefer: 'return=minimal',
         },
       },
-      (res) => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(true);
-        } else {
-          console.error(`Supabase returned status ${res.statusCode}`);
-          resolve(false);
-        }
-      }
+      body
     );
 
-    req.on('error', (err) => {
-      console.error('Network error posting to Supabase:', err.message);
-      resolve(false);
-    });
-
-    req.write(body);
-    req.end();
-  });
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return true;
+    } else {
+      console.error(`Supabase returned status ${res.statusCode}: ${res.body}`);
+      return false;
+    }
+  } catch (err) {
+    console.error('Network error posting to Supabase:', err.message);
+    return false;
+  }
 }
 
 console.log('='.repeat(65));

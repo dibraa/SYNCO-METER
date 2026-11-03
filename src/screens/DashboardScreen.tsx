@@ -78,7 +78,7 @@ export const DashboardScreen: React.FC = () => {
                 { color: sourceMode === 'MOCK' ? '#38BDF8' : '#34D399' },
               ]}
             >
-              {sourceMode === 'MOCK' ? 'MOCK SIM' : 'SUPABASE'}
+              {sourceMode === 'MOCK' ? 'MOCK SIM' : 'LIVE'}
             </Text>
           </TouchableOpacity>
 

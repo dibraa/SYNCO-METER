@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -7,196 +7,282 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTelemetry } from '../context/TelemetryContext';
+import {
+  loadSavedSupabaseConfig,
+  saveSupabaseConfig,
+  clearSupabaseConfig,
+  testSupabaseConnection,
+  getLoadedConfig,
+  isSupabaseConfigured,
+  SupabaseConfig,
+} from '../services/supabaseClient';
 
 interface SupabaseConfigModalProps {
   visible: boolean;
   onClose: () => void;
+  onSaveSuccess?: (config: SupabaseConfig) => void;
 }
 
 export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
   visible,
   onClose,
+  onSaveSuccess,
 }) => {
-  const {
-    sourceMode,
-    setSourceMode,
-    supabaseConfig,
-    updateSupabaseConfig,
-    tariffRate,
-    setTariffRate,
-    overloadLimitWatts,
-    setOverloadLimitWatts,
-    currencySymbol,
-  } = useTelemetry();
+  const [url, setUrl] = useState('');
+  const [anonKey, setAnonKey] = useState('');
+  const [deviceId, setDeviceId] = useState('ESP32-PZEM-DEV-01');
 
-  const [url, setUrl] = useState(supabaseConfig.url);
-  const [anonKey, setAnonKey] = useState(supabaseConfig.anonKey);
-  const [deviceId, setDeviceId] = useState(supabaseConfig.deviceId);
-  const [tariff, setTariff] = useState(tariffRate.toString());
-  const [overload, setOverload] = useState(overloadLimitWatts.toString());
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = async () => {
-    const numTariff = parseFloat(tariff) || 12.0;
-    const numOverload = parseFloat(overload) || 3000;
+  useEffect(() => {
+    if (visible) {
+      const cfg = getLoadedConfig();
+      setUrl(cfg.url || '');
+      setAnonKey(cfg.anonKey || '');
+      setDeviceId(cfg.deviceId || 'ESP32-PZEM-DEV-01');
+      setTestResult(null);
 
-    setTariffRate(numTariff);
-    setOverloadLimitWatts(numOverload);
+      // Refresh from storage in case it changed externally
+      loadSavedSupabaseConfig().then((fresh) => {
+        setUrl(fresh.url || '');
+        setAnonKey(fresh.anonKey || '');
+        setDeviceId(fresh.deviceId || 'ESP32-PZEM-DEV-01');
+      });
+    }
+  }, [visible]);
 
-    await updateSupabaseConfig({
-      url: url.trim(),
-      anonKey: anonKey.trim(),
-      deviceId: deviceId.trim(),
-    });
+  const handleTestConnection = async () => {
+    if (!url.trim() || !anonKey.trim()) {
+      setTestResult({
+        success: false,
+        message: 'Please enter both the server URL and public API key.',
+      });
+      return;
+    }
 
-    Alert.alert('Settings Saved', 'Telemetry and Cloud configuration updated successfully.');
-    onClose();
+    setIsTesting(true);
+    setTestResult(null);
+
+    const result = await testSupabaseConnection(url.trim(), anonKey.trim());
+    setIsTesting(false);
+    setTestResult(result);
   };
 
+  const handleSave = async () => {
+    setIsSaving(true);
+    const newConfig: SupabaseConfig = {
+      url: url.trim(),
+      anonKey: anonKey.trim(),
+      deviceId: deviceId.trim() || 'ESP32-PZEM-DEV-01',
+    };
+
+    const success = await saveSupabaseConfig(newConfig);
+    setIsSaving(false);
+
+    if (success) {
+      if (onSaveSuccess) {
+        onSaveSuccess(newConfig);
+      }
+      Alert.alert(
+        'Connection saved',
+        newConfig.url
+          ? 'Connection settings saved successfully.'
+          : 'Credentials cleared. The app will run in local demo mode.'
+      );
+      onClose();
+    } else {
+      Alert.alert('Error', 'Failed to save configuration to local storage.');
+    }
+  };
+
+  const handleClear = () => {
+    Alert.alert(
+      'Reset Credentials',
+      'Are you sure you want to clear saved connection settings? The app will revert to demo simulation mode.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            await clearSupabaseConfig();
+            setUrl('');
+            setAnonKey('');
+            setDeviceId('ESP32-PZEM-DEV-01');
+            setTestResult(null);
+            Alert.alert('Reset', 'Connection settings have been reset.');
+          },
+        },
+      ]
+    );
+  };
+
+  const isConfigured = isSupabaseConfigured();
+
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.modalCard}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <MaterialCommunityIcons name="cog" size={24} color="#38BDF8" />
-              <Text style={styles.title}>SYSTEM & CLOUD CONFIG</Text>
+              <MaterialCommunityIcons name="cloud-sync-outline" size={24} color="#34D399" />
+              <View>
+                <Text style={styles.title}>CONNECTION SETTINGS</Text>
+                <Text style={styles.subtitle}>Connect IoT Telemetry & Authentication</Text>
+              </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close settings">
               <MaterialCommunityIcons name="close" size={20} color="#94A3B8" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Mode Switcher */}
-            <Text style={styles.sectionTitle}>DATA SOURCE MODE</Text>
-            <View style={styles.modeRow}>
-              <TouchableOpacity
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            {/* Status Pill */}
+            <View style={styles.statusBox}>
+              <View
                 style={[
-                  styles.modeButton,
-                  sourceMode === 'MOCK' && styles.modeButtonActive,
+                  styles.statusDot,
+                  { backgroundColor: isConfigured ? '#34D399' : '#F59E0B' },
                 ]}
-                onPress={() => setSourceMode('MOCK')}
-              >
-                <MaterialCommunityIcons
-                  name="cpu-64-bit"
-                  size={20}
-                  color={sourceMode === 'MOCK' ? '#38BDF8' : '#64748B'}
-                />
-                <Text
-                  style={[
-                    styles.modeButtonText,
-                    sourceMode === 'MOCK' && styles.modeButtonTextActive,
-                  ]}
-                >
-                  Mock Generator
+              />
+              <View style={styles.statusInfo}>
+                <Text style={styles.statusLabel}>
+                  {isConfigured ? 'Status: Connected' : 'Status: Offline / Demo Simulation'}
                 </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.modeButton,
-                  sourceMode === 'SUPABASE' && styles.modeButtonActive,
-                ]}
-                onPress={() => {
-                  if (!url && !supabaseConfig.url) {
-                    Alert.alert(
-                      'Supabase URL Missing',
-                      'Please configure your Supabase URL & Anon Key below first.'
-                    );
-                    return;
-                  }
-                  setSourceMode('SUPABASE');
-                }}
-              >
-                <MaterialCommunityIcons
-                  name="cloud-sync"
-                  size={20}
-                  color={sourceMode === 'SUPABASE' ? '#34D399' : '#64748B'}
-                />
-                <Text
-                  style={[
-                    styles.modeButtonText,
-                    sourceMode === 'SUPABASE' && styles.modeButtonTextActive,
-                  ]}
-                >
-                  Supabase Live
+                <Text style={styles.statusHelp}>
+                  {isConfigured
+                    ? 'App is streaming live telemetry and syncing auth.'
+                    : 'Enter your server URL and public API key to connect.'}
                 </Text>
-              </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Supabase Cloud Settings */}
-            <Text style={styles.sectionTitle}>SUPABASE CREDENTIALS</Text>
-            <Text style={styles.fieldLabel}>Project URL</Text>
+            {/* Supabase URL */}
+            <Text style={styles.fieldLabel}>Server URL</Text>
             <TextInput
               style={styles.input}
-              placeholder="https://xyzcompany.supabase.co"
-              placeholderTextColor="#475569"
+              placeholder="https://your-server.example.com"
+              placeholderTextColor="#64748B"
               value={url}
-              onChangeText={setUrl}
+              onChangeText={(t) => {
+                setUrl(t);
+                if (testResult) setTestResult(null);
+              }}
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType="url"
             />
+            <Text style={styles.hint}>
+              Enter the server URL provided by your administrator.
+            </Text>
 
+            {/* Supabase Anon Key */}
             <Text style={styles.fieldLabel}>Anon Public API Key</Text>
             <TextInput
               style={[styles.input, styles.inputMultiline]}
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
-              placeholderTextColor="#475569"
+              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              placeholderTextColor="#64748B"
               value={anonKey}
-              onChangeText={setAnonKey}
+              onChangeText={(t) => {
+                setAnonKey(t);
+                if (testResult) setTestResult(null);
+              }}
               multiline
               autoCapitalize="none"
               autoCorrect={false}
             />
+            <Text style={styles.hint}>
+              Enter the public API key provided by your administrator.
+            </Text>
 
-            <Text style={styles.fieldLabel}>Target Device ID</Text>
+            {/* Target Device ID */}
+            <Text style={styles.fieldLabel}>Target Device ID (PZEM Smart Plug)</Text>
             <TextInput
               style={styles.input}
               placeholder="ESP32-PZEM-DEV-01"
-              placeholderTextColor="#475569"
+              placeholderTextColor="#64748B"
               value={deviceId}
               onChangeText={setDeviceId}
               autoCapitalize="none"
             />
+            <Text style={styles.hint}>
+              Must match the device_id_str in your public.devices table
+            </Text>
 
-            {/* Smart Meter Parameters */}
-            <Text style={styles.sectionTitle}>METER PARAMETERS</Text>
-            <View style={styles.paramRow}>
-              <View style={styles.paramCol}>
-                <Text style={styles.fieldLabel}>Tariff ({currencySymbol}/kWh)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="12.00"
-                  placeholderTextColor="#475569"
-                  value={tariff}
-                  onChangeText={setTariff}
-                  keyboardType="numeric"
+            {/* Test Result Banner */}
+            {testResult && (
+              <View
+                style={[
+                  styles.testBanner,
+                  testResult.success ? styles.testSuccess : styles.testFailure,
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={testResult.success ? 'check-circle' : 'alert-circle'}
+                  size={20}
+                  color={testResult.success ? '#34D399' : '#EF4444'}
                 />
+                <Text
+                  style={[
+                    styles.testText,
+                    { color: testResult.success ? '#34D399' : '#EF4444' },
+                  ]}
+                >
+                  {testResult.message}
+                </Text>
               </View>
+            )}
 
-              <View style={styles.paramCol}>
-                <Text style={styles.fieldLabel}>Overload Limit (W)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="3000"
-                  placeholderTextColor="#475569"
-                  value={overload}
-                  onChangeText={setOverload}
-                  keyboardType="numeric"
-                />
-              </View>
+            {/* Actions */}
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.testBtn}
+                onPress={handleTestConnection}
+                disabled={isTesting}
+              >
+                {isTesting ? (
+                  <ActivityIndicator size="small" color="#38BDF8" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="lightning-bolt" size={18} color="#38BDF8" />
+                    <Text style={styles.testBtnText}>TEST CONNECTION</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="content-save-check" size={18} color="#FFFFFF" />
+                    <Text style={styles.saveBtnText}>SAVE & CONNECT</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
 
-            {/* Save Button */}
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <MaterialCommunityIcons name="content-save-check" size={20} color="#FFFFFF" />
-              <Text style={styles.saveButtonText}>SAVE CONFIGURATION</Text>
-            </TouchableOpacity>
+            {/* Reset button */}
+            {Boolean(url || anonKey) && (
+              <TouchableOpacity style={styles.resetBtn} onPress={handleClear}>
+                <MaterialCommunityIcons name="trash-can-outline" size={16} color="#94A3B8" />
+                <Text style={styles.resetBtnText}>Clear credentials (Use offline demo)</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
       </View>
@@ -215,7 +301,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
-    maxHeight: '85%',
+    maxHeight: '90%',
     borderWidth: 1,
     borderColor: '#334155',
   },
@@ -223,12 +309,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   title: {
     fontSize: 14,
@@ -236,54 +322,55 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     letterSpacing: 1,
   },
+  subtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
   closeBtn: {
-    padding: 6,
+    padding: 8,
     backgroundColor: '#1E293B',
     borderRadius: 8,
   },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#38BDF8',
-    letterSpacing: 1,
-    marginTop: 14,
-    marginBottom: 8,
+  scrollContent: {
+    paddingBottom: 20,
   },
-  modeRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 10,
-  },
-  modeButton: {
-    flex: 1,
+  statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 12,
     backgroundColor: '#1E293B',
-    paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  modeButtonActive: {
-    borderColor: '#38BDF8',
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  modeButtonText: {
-    fontSize: 12,
+  statusInfo: {
+    flex: 1,
+  },
+  statusLabel: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#64748B',
-  },
-  modeButtonTextActive: {
     color: '#F8FAFC',
   },
-  fieldLabel: {
+  statusHelp: {
     fontSize: 11,
-    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#94A3B8',
     marginBottom: 6,
-    marginTop: 6,
+    marginTop: 10,
+    letterSpacing: 0.5,
   },
   input: {
     backgroundColor: '#1E293B',
@@ -299,28 +386,85 @@ const styles = StyleSheet.create({
     height: 70,
     textAlignVertical: 'top',
   },
-  paramRow: {
-    flexDirection: 'row',
-    gap: 12,
+  hint: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 4,
+    marginBottom: 4,
   },
-  paramCol: {
+  testBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 14,
+  },
+  testSuccess: {
+    backgroundColor: 'rgba(52, 211, 153, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.3)',
+  },
+  testFailure: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  testText: {
+    fontSize: 12,
+    fontWeight: '600',
     flex: 1,
   },
-  saveButton: {
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  testBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#0284C7',
-    paddingVertical: 16,
-    borderRadius: 16,
-    marginTop: 24,
-    marginBottom: 30,
+    gap: 6,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    paddingVertical: 14,
+    borderRadius: 14,
   },
-  saveButtonText: {
-    fontSize: 13,
+  testBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#38BDF8',
+    letterSpacing: 0.5,
+  },
+  saveBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#177245',
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  saveBtnText: {
+    fontSize: 12,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+  },
+  resetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  resetBtnText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
   },
 });

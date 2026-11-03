@@ -1,6 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { SmartNode, TabType, SystemMode, HemsReport, DailyLog, HourlyDistribution } from '../types/hems';
 import { createConsumptionSnapshot, RoomConsumption } from '../utils/consumption';
+import {
+  isSupabaseConfigured,
+  getLoadedConfig,
+  onSupabaseConfigChange,
+} from '../services/supabaseClient';
+import { RealtimeService } from '../services/realtimeService';
 
 interface HemsContextType {
   consumptionRooms: RoomConsumption[];
@@ -24,6 +30,9 @@ interface HemsContextType {
   applyStandbyRule: () => void;
   ruleApplied: boolean;
   signOut: () => void;
+  isSupabaseConnected: boolean;
+  supabaseDeviceId: string;
+  isHardwareTelemetryActive: boolean;
 }
 
 const HemsContext = createContext<HemsContextType | undefined>(undefined);
@@ -41,15 +50,21 @@ export const HemsProvider: React.FC<{
       setActiveTab('home');
     }
   }, [activeTab]);
+
   const [systemMode, setSystemMode] = useState<SystemMode>('Auto');
   const [ruleApplied, setRuleApplied] = useState(false);
+
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(isSupabaseConfigured());
+  const [supabaseDeviceId, setSupabaseDeviceId] = useState<string>(getLoadedConfig().deviceId || 'ESP32-PZEM-DEV-01');
+  const [isHardwareTelemetryActive, setIsHardwareTelemetryActive] = useState(false);
+  const lastHardwareTimestamp = useRef<number>(0);
 
   const [nodes, setNodes] = useState<SmartNode[]>([
     {
       id: 'node-1',
       name: 'Room 1 Plug',
       location: 'Living Room Plug',
-      code: 'LR-PLUG-A',
+      code: 'ESP32-PZEM-DEV-01',
       hardware: 'PZEM-004T v3.0',
       isOnline: true,
       relayState: true,
@@ -144,9 +159,119 @@ export const HemsProvider: React.FC<{
     { time: '23:59', loadWatts: 560, cutWatts: 620 },
   ]);
 
-  // Real-time telemetry simulation & countdown timer
+  // Connect to Supabase Realtime Telemetry
+  useEffect(() => {
+    function setupSupabaseSync() {
+      const configured = isSupabaseConfigured();
+      setIsSupabaseConnected(configured);
+
+      if (!configured) {
+        RealtimeService.unsubscribe();
+        setIsHardwareTelemetryActive(false);
+        return;
+      }
+
+      const devId = getLoadedConfig().deviceId || 'ESP32-PZEM-DEV-01';
+      setSupabaseDeviceId(devId);
+
+      // 1. Initial snapshot fetch from database
+      RealtimeService.fetchLatestReading(devId).then((reading) => {
+        if (reading) {
+          lastHardwareTimestamp.current = Date.now();
+          setIsHardwareTelemetryActive(true);
+          setNodes((prev) =>
+            prev.map((node) => {
+              if (node.id === 'node-1') {
+                return {
+                  ...node,
+                  voltage: reading.voltage,
+                  current: reading.current,
+                  activePowerWatts: Math.round(reading.power),
+                  powerFactor: reading.powerFactor,
+                  frequency: reading.frequency,
+                  todayKwh: reading.energy > 0 ? reading.energy : node.todayKwh,
+                };
+              }
+              return node;
+            })
+          );
+        }
+      });
+
+      // 2. Fetch device relay status
+      RealtimeService.fetchDevice(devId).then((device) => {
+        if (device && typeof device.relay_state === 'boolean') {
+          setNodes((prev) =>
+            prev.map((node) =>
+              node.id === 'node-1' ? { ...node, relayState: device.relay_state } : node
+            )
+          );
+        }
+      });
+
+      // 3. Subscribe to real-time events (broadcast + postgres_changes)
+      RealtimeService.subscribeToTelemetry(
+        devId,
+        (reading) => {
+          lastHardwareTimestamp.current = Date.now();
+          setIsHardwareTelemetryActive(true);
+          setNodes((prev) =>
+            prev.map((node) => {
+              if (node.id === 'node-1') {
+                return {
+                  ...node,
+                  voltage: reading.voltage,
+                  current: reading.current,
+                  activePowerWatts: Math.round(reading.power),
+                  powerFactor: reading.powerFactor,
+                  frequency: reading.frequency,
+                  todayKwh: reading.energy > 0 ? reading.energy : node.todayKwh,
+                  relayState: reading.relayState !== undefined ? reading.relayState : node.relayState,
+                };
+              }
+              return node;
+            })
+          );
+        },
+        (newRelayState) => {
+          setNodes((prev) =>
+            prev.map((node) => {
+              if (node.id === 'node-1') {
+                return {
+                  ...node,
+                  relayState: newRelayState,
+                  activePowerWatts: newRelayState ? node.activePowerWatts || 860 : 0,
+                };
+              }
+              return node;
+            })
+          );
+        }
+      );
+    }
+
+    setupSupabaseSync();
+
+    const unsubConfig = onSupabaseConfigChange(() => {
+      setupSupabaseSync();
+    });
+
+    return () => {
+      unsubConfig();
+      RealtimeService.unsubscribe();
+    };
+  }, []);
+
+  // Background timer (handles auto-cutoff countdowns and fallback simulation)
   useEffect(() => {
     const timer = setInterval(() => {
+      const now = Date.now();
+      const hasRecentLiveTelemetry = now - lastHardwareTimestamp.current < 7000;
+
+      if (!hasRecentLiveTelemetry && isHardwareTelemetryActive) {
+        setIsHardwareTelemetryActive(false);
+      }
+
       setNodes((prevNodes) =>
         prevNodes.map((node) => {
           let countdown = node.cutoffCountdownSeconds;
@@ -159,10 +284,23 @@ export const HemsProvider: React.FC<{
               // Trigger auto-cutoff
               relay = false;
               isCutoffPending = false;
+              if (isSupabaseConfigured() && node.id === 'node-1') {
+                RealtimeService.toggleRelay(supabaseDeviceId, false);
+              }
             }
           }
 
-          // Small natural electrical noise
+          // If node-1 has recent real live hardware data from Supabase, preserve it
+          if (node.id === 'node-1' && hasRecentLiveTelemetry) {
+            return {
+              ...node,
+              relayState: relay,
+              cutoffPending: isCutoffPending,
+              cutoffCountdownSeconds: countdown,
+            };
+          }
+
+          // Otherwise natural electrical simulation
           const vNoise = (Math.random() - 0.5) * 0.8;
           const voltage = +(228.4 + vNoise).toFixed(1);
 
@@ -197,13 +335,20 @@ export const HemsProvider: React.FC<{
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [isHardwareTelemetryActive, supabaseDeviceId]);
 
   const toggleNodeRelay = (id: string) => {
     setNodes((prev) =>
       prev.map((node) => {
         if (node.id === id) {
           const nextRelay = !node.relayState;
+
+          // Dispatch command to Supabase
+          if (isSupabaseConfigured()) {
+            const targetId = node.code || supabaseDeviceId;
+            RealtimeService.toggleRelay(targetId, nextRelay);
+          }
+
           return {
             ...node,
             relayState: nextRelay,
@@ -274,6 +419,9 @@ export const HemsProvider: React.FC<{
         applyStandbyRule,
         ruleApplied,
         signOut,
+        isSupabaseConnected,
+        supabaseDeviceId,
+        isHardwareTelemetryActive,
       }}
     >
       {children}

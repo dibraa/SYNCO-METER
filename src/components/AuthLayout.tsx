@@ -6,6 +6,9 @@ import {
   Animated,
   Easing,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 
@@ -97,7 +100,16 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
   const currentAngle = startAngle + totalAngle * percentage;
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
       {/* Brand Panel — Top 40% */}
       <Animated.View
         style={[
@@ -177,7 +189,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
       >
         {children}
       </Animated.View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -186,8 +199,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   brandPanel: {
-    flex: 0.4,
+    paddingVertical: 32,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
@@ -255,7 +274,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   formPanel: {
-    flex: 0.6,
+    flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 20,
   },
