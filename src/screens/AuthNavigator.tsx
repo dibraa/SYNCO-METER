@@ -19,6 +19,7 @@ export const AuthNavigator: React.FC<AuthNavigatorProps> = ({ onAuthSuccess }) =
         initialEmail={forgotEmail}
         initialStep="request"
         onBackToLogin={() => setMode('login')}
+        onSwitchToSignup={() => setMode('signup')}
         onResetComplete={onAuthSuccess}
       />
     );

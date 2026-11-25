@@ -46,7 +46,6 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmError, setConfirmError] = useState('');
-  const [needsVerification, setNeedsVerification] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   const [configModalVisible, setConfigModalVisible] = useState(false);
@@ -57,6 +56,13 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(12)).current;
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const scheduleTimeout = useCallback((fn: () => void, ms: number) => {
+    const t = setTimeout(fn, ms);
+    timersRef.current.push(t);
+    return t;
+  }, []);
 
   const refreshReachability = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -102,6 +108,8 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     return () => {
       mounted = false;
       unsubscribe();
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
     };
   }, [fadeAnim, slideAnim, refreshReachability]);
 
@@ -198,7 +206,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
           setReachability('reachable');
           setIsLoading(false);
           setShowSuccess(true);
-          setTimeout(() => {
+          scheduleTimeout(() => {
             onSignupSuccess();
           }, 500);
           return;
@@ -217,7 +225,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
           if (!loginError && loginData.session) {
             setReachability('reachable');
             setShowSuccess(true);
-            setTimeout(() => {
+            scheduleTimeout(() => {
               onSignupSuccess();
             }, 500);
             return;
@@ -230,14 +238,16 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
             return;
           }
 
-          setNeedsVerification(true);
+          setError(
+            'Account created, but auto-login requires Confirm email to be OFF under Authentication → Providers → Email in Supabase Dashboard.'
+          );
           return;
         }
 
         setReachability('reachable');
         setIsLoading(false);
         setShowSuccess(true);
-        setTimeout(() => {
+        scheduleTimeout(() => {
           onSignupSuccess();
         }, 500);
       } catch (err) {
@@ -250,37 +260,15 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
         }
       }
     } else {
-      setTimeout(() => {
+      scheduleTimeout(() => {
         setIsLoading(false);
         setShowSuccess(true);
-        setTimeout(() => {
+        scheduleTimeout(() => {
           onSignupSuccess();
         }, 700);
       }, 500);
     }
   };
-
-  if (needsVerification) {
-    return (
-      <View style={styles.centerContainer}>
-        <View style={styles.iconCircle}>
-          <MaterialCommunityIcons name="email-check-outline" size={50} color={colors.primary} />
-        </View>
-        <Text style={styles.successTitle}>Check Your Inbox</Text>
-        <Text style={styles.verificationText}>
-          We sent a verification link to <Text style={styles.bold}>{email.trim()}</Text>. Open the
-          link in your email to activate your account, then sign in.
-        </Text>
-        <TouchableOpacity
-          style={[styles.primaryButton, { width: '100%' }]}
-          onPress={onSwitchToLogin}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.primaryButtonText}>Return to Sign In</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
   if (showSuccess) {
     return (
@@ -702,16 +690,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.muted,
     textAlign: 'center',
-  },
-  verificationText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  bold: {
-    fontWeight: '700',
-    color: colors.text,
   },
 });

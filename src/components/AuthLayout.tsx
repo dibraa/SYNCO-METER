@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   },
   heroWrap: {
     width: '100%',
-    paddingTop: 32,
+    paddingTop: Platform.OS === 'android' ? 46 : 36,
     paddingBottom: 46,
     paddingHorizontal: 24,
     alignItems: 'center',

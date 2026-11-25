@@ -15,6 +15,7 @@ import {
   isSupabaseConfigured,
   getLoadedConfig,
   getPasswordResetRedirectUrl,
+  checkEmailRegistered,
   withAuthRetry,
   classifySupabaseError,
 } from '../services/supabaseClient';
@@ -27,6 +28,7 @@ interface ForgotPasswordScreenProps {
   initialEmail?: string;
   initialStep?: 'request' | 'reset';
   onBackToLogin: () => void;
+  onSwitchToSignup?: () => void;
   onResetComplete: () => void;
 }
 
@@ -34,6 +36,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
   initialEmail = '',
   initialStep = 'request',
   onBackToLogin,
+  onSwitchToSignup,
   onResetComplete,
 }) => {
   const [step, setStep] = useState<RecoveryStep>(initialStep);
@@ -46,6 +49,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isNetworkErr, setIsNetworkErr] = useState(false);
+  const [isUnregisteredEmail, setIsUnregisteredEmail] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmError, setConfirmError] = useState('');
@@ -89,6 +93,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
   const handleSendResetEmail = async () => {
     setError('');
     setIsNetworkErr(false);
+    setIsUnregisteredEmail(false);
     if (!validateEmail(email)) return;
 
     const supabase = getSupabase();
@@ -100,6 +105,19 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
 
     setIsLoading(true);
     try {
+      // 1. Verify the email is registered before requesting a reset link
+      const registrationStatus = await checkEmailRegistered(email.trim());
+      if (registrationStatus === 'not_registered') {
+        setIsLoading(false);
+        setIsUnregisteredEmail(true);
+        setEmailError('This email is not registered');
+        setError(
+          `No account found for ${email.trim()}. Check the spelling or create a new account.`
+        );
+        return;
+      }
+
+      // 2. Send the password reset email
       const redirectTo = getPasswordResetRedirectUrl();
       const { error: resetError } = await withAuthRetry(() =>
         supabase.auth.resetPasswordForEmail(
@@ -294,6 +312,17 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
                     </TouchableOpacity>
                   </View>
                 ) : null}
+                {isUnregisteredEmail && onSwitchToSignup ? (
+                  <View style={styles.errorActions}>
+                    <TouchableOpacity
+                      style={styles.errorActionBtn}
+                      onPress={onSwitchToSignup}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.errorActionText}>Create Account</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -313,6 +342,10 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
                   onChangeText={(t) => {
                     setEmail(t);
                     if (emailError) setEmailError('');
+                    if (isUnregisteredEmail) {
+                      setIsUnregisteredEmail(false);
+                      setError('');
+                    }
                   }}
                   onBlur={() => email && validateEmail(email)}
                   keyboardType="email-address"

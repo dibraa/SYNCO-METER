@@ -112,7 +112,10 @@ export function isSupabaseConfigured(): boolean {
 export function isTransientNetworkError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const e = err as { name?: string; status?: number; message?: string };
-  if (e.name === 'AuthRetryableFetchError' || e.name === 'AbortError') return true;
+  if (e.name === 'AbortError') return true;
+  // HTTP 4xx/5xx responses mean the server WAS reached — not a network/DNS failure.
+  if (typeof e.status === 'number' && e.status >= 400) return false;
+  if (e.name === 'AuthRetryableFetchError' && (!e.status || e.status === 0)) return true;
   if (e.status === 0) return true;
   const msg = (e.message || '').toLowerCase();
   return (
@@ -131,6 +134,38 @@ export function getPasswordResetRedirectUrl(): string | undefined {
     return window.location.origin;
   }
   return undefined;
+}
+
+export type EmailRegistrationCheck = 'registered' | 'not_registered' | 'unknown';
+
+/**
+ * Checks whether an email address exists in Supabase auth.users via the
+ * public.check_email_registered RPC (002_check_email_registered.sql).
+ * Returns 'unknown' if the RPC has not been applied yet so reset flow stays non-breaking.
+ */
+export async function checkEmailRegistered(email: string): Promise<EmailRegistrationCheck> {
+  const supabase = getSupabase();
+  if (!supabase || !isSupabaseConfigured()) return 'unknown';
+
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return 'not_registered';
+
+  const { data, error } = await withAuthRetry(async () =>
+    await supabase.rpc('check_email_registered', { p_email: normalized })
+  );
+
+  if (error) {
+    // PostgREST PGRST202 / Postgres 42883: RPC not created in DB yet
+    if (error.code === 'PGRST202' || error.code === '42883') {
+      console.warn(
+        '[SupabaseClient] check_email_registered RPC not found. Run supabase/migrations/002_check_email_registered.sql in Supabase SQL Editor.'
+      );
+      return 'unknown';
+    }
+    throw error;
+  }
+
+  return data === true ? 'registered' : 'not_registered';
 }
 
 export function classifySupabaseError(
@@ -154,12 +189,30 @@ export function classifySupabaseError(
     };
   }
 
+  const status =
+    err && typeof err === 'object' && 'status' in err && typeof (err as { status?: unknown }).status === 'number'
+      ? (err as { status: number }).status
+      : undefined;
+
   const msg =
     err && typeof err === 'object' && 'message' in err && typeof (err as { message?: unknown }).message === 'string'
       ? (err as { message: string }).message
       : 'Authentication failed. Please try again.';
 
   const lower = msg.toLowerCase();
+  if (lower.includes('error sending recovery email') || lower.includes('error sending')) {
+    return {
+      isNetworkError: false,
+      message:
+        'Supabase failed to send the email (HTTP 500). Check your Custom SMTP settings (Host, Port, Sender Email, and App Password) in Supabase Dashboard.',
+    };
+  }
+  if (status && status >= 500 && (!msg || msg === '{}' || lower === 'unexpected_failure')) {
+    return {
+      isNetworkError: false,
+      message: `Supabase server error (HTTP ${status}). Check your Supabase Auth / SMTP configuration and try again.`,
+    };
+  }
   if (lower.includes('rate limit') || lower.includes('for security purposes')) {
     return {
       isNetworkError: false,
@@ -187,8 +240,9 @@ function delay(ms: number): Promise<void> {
  */
 export async function withAuthRetry<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 2
+  maxRetries: number = 3
 ): Promise<T> {
+  const backoffMs = [600, 1400, 2500];
   let attempt = 0;
   while (true) {
     try {
@@ -199,15 +253,17 @@ export async function withAuthRetry<T>(
           : null;
 
       if (maybeError && isTransientNetworkError(maybeError) && attempt < maxRetries) {
+        const wait = backoffMs[attempt] ?? 2500;
         attempt += 1;
-        await delay(450 * attempt);
+        await delay(wait);
         continue;
       }
       return result;
     } catch (err) {
       if (isTransientNetworkError(err) && attempt < maxRetries) {
+        const wait = backoffMs[attempt] ?? 2500;
         attempt += 1;
-        await delay(450 * attempt);
+        await delay(wait);
         continue;
       }
       throw err;
