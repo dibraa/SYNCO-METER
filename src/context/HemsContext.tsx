@@ -10,6 +10,8 @@ import {
   PlugInput,
 } from '../types/hems';
 import { createConsumptionSnapshot, RoomConsumption } from '../utils/consumption';
+import { ActiveAlert } from '../utils/alerts';
+import { PrototypeBridgePayload } from '../types/telemetry';
 import {
   isSupabaseConfigured,
   getLoadedConfig,
@@ -99,6 +101,8 @@ interface HemsContextType {
   isSupabaseConnected: boolean;
   supabaseDeviceId: string;
   isHardwareTelemetryActive: boolean;
+  isPrototypeLinked: boolean;
+  prototypeAlerts: ActiveAlert[];
 }
 
 const HemsContext = createContext<HemsContextType | undefined>(undefined);
@@ -142,7 +146,10 @@ export const HemsProvider: React.FC<{
     getLoadedConfig().deviceId || 'ESP32-PZEM-DEV-01'
   );
   const [isHardwareTelemetryActive, setIsHardwareTelemetryActive] = useState(false);
+  const [isPrototypeLinked, setIsPrototypeLinked] = useState(false);
+  const [prototypeAlerts, setPrototypeAlerts] = useState<ActiveAlert[]>([]);
   const lastHardwareTimestamp = useRef<number>(0);
+  const lastPrototypeTimestamp = useRef<number>(0);
 
   const [nodes, setNodes] = useState<SmartNode[]>(DEFAULT_NODES);
   const snapshotCacheRef = useRef<Map<string, RoomConsumption>>(new Map());
@@ -239,15 +246,69 @@ export const HemsProvider: React.FC<{
     { time: '23:59', loadWatts: 560, cutWatts: 620 },
   ]);
 
-  // Connect to Supabase Realtime Telemetry
+  // Connect to Supabase Realtime Telemetry & 3D Hardware Prototype Bridge
   useEffect(() => {
+    const applyPrototypeSnapshot = (snapshot: PrototypeBridgePayload) => {
+      const now = Date.now();
+      lastPrototypeTimestamp.current = now;
+      lastHardwareTimestamp.current = now;
+      setIsPrototypeLinked(true);
+      setIsHardwareTelemetryActive(true);
+
+      const incomingAlerts: ActiveAlert[] = [];
+      for (const rm of snapshot.rooms) {
+        if (rm.alert) {
+          incomingAlerts.push({
+            id: rm.alert.id,
+            title: rm.alert.title,
+            description: rm.alert.description,
+            urgent: rm.alert.urgent,
+          });
+        }
+      }
+      setPrototypeAlerts(incomingAlerts);
+
+      setNodes((prev) =>
+        prev.map((node, idx) => {
+          const matched =
+            snapshot.rooms.find((r) => r.deviceCode && node.code === r.deviceCode) ||
+            snapshot.rooms.find((r) => r.roomIndex === idx);
+
+          if (!matched) return node;
+
+          const tariff = snapshot.tariffPerKwh || 12;
+          const liveKwh = matched.energyKwh > 0 ? +matched.energyKwh.toFixed(3) : node.todayKwh;
+
+          return {
+            ...node,
+            isOnline: snapshot.online && matched.isOnline,
+            relayState: matched.relayState,
+            occupancy: matched.occupancy,
+            cutoffPending: matched.cutoffPending,
+            cutoffCountdownSeconds: matched.cutoffCountdownSeconds,
+            voltage: +matched.voltage.toFixed(1),
+            current: +matched.current.toFixed(2),
+            activePowerWatts: Math.round(matched.power),
+            powerFactor: +matched.powerFactor.toFixed(2),
+            frequency: +matched.frequency.toFixed(1),
+            todayKwh: liveKwh,
+            todayCost: +(liveKwh * tariff).toFixed(2),
+            autoTrips: matched.autoTrips,
+            standbyBleedWatts: 0,
+          };
+        })
+      );
+    };
+
     function setupSupabaseSync() {
       const configured = isSupabaseConfigured();
       setIsSupabaseConnected(configured);
 
+      // Always subscribe to the 3D Hardware Prototype bridge (uses Supabase Realtime + local BroadcastChannel)
+      RealtimeService.subscribeToPrototypeBridge(applyPrototypeSnapshot);
+
       if (!configured) {
         RealtimeService.unsubscribe();
-        setIsHardwareTelemetryActive(false);
         return;
       }
 
@@ -342,6 +403,7 @@ export const HemsProvider: React.FC<{
     return () => {
       unsubConfig();
       RealtimeService.unsubscribe();
+      RealtimeService.unsubscribePrototypeBridge();
     };
   }, []);
 
@@ -349,17 +411,35 @@ export const HemsProvider: React.FC<{
   useEffect(() => {
     const timer = setInterval(() => {
       const now = Date.now();
-      const hasRecentLiveTelemetry = now - lastHardwareTimestamp.current < 7000;
+      const hasRecentPrototype = now - lastPrototypeTimestamp.current < 10000;
+      const hasRecentLiveTelemetry =
+        hasRecentPrototype || now - lastHardwareTimestamp.current < 7000;
 
+      if (!hasRecentPrototype && isPrototypeLinked) {
+        setIsPrototypeLinked(false);
+        setPrototypeAlerts([]);
+      }
       if (!hasRecentLiveTelemetry && isHardwareTelemetryActive) {
         setIsHardwareTelemetryActive(false);
       }
 
       setNodes((prevNodes) =>
-        prevNodes.map((node) => {
+        prevNodes.map((node, idx) => {
           let countdown = node.cutoffCountdownSeconds;
           let isCutoffPending = node.cutoffPending;
           let relay = node.relayState;
+
+          // When linked live to the 3D hardware prototype, let the prototype own room 1 & 2 state
+          const isSyncedPrototypeNode =
+            hasRecentPrototype &&
+            (idx < 2 || node.code === 'ESP32-PZEM-DEV-01' || node.code === 'BR-PLUG-B');
+          if (isSyncedPrototypeNode) {
+            return {
+              ...node,
+              cutoffCountdownSeconds:
+                isCutoffPending && countdown > 0 ? Math.max(0, countdown - 1) : countdown,
+            };
+          }
 
           if (isCutoffPending && countdown > 0) {
             countdown -= 1;
@@ -416,17 +496,25 @@ export const HemsProvider: React.FC<{
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isHardwareTelemetryActive, supabaseDeviceId]);
+  }, [isHardwareTelemetryActive, isPrototypeLinked, supabaseDeviceId]);
 
   const toggleNodeRelay = (id: string) => {
     setNodes((prev) => {
-      const next = prev.map((node) => {
+      const next = prev.map((node, idx) => {
         if (node.id === id) {
           const nextRelay = !node.relayState;
+          const targetId = node.code || supabaseDeviceId;
           if (isSupabaseConfigured()) {
-            const targetId = node.code || supabaseDeviceId;
             RealtimeService.toggleRelay(targetId, nextRelay);
           }
+          void RealtimeService.sendPrototypeCommand({
+            source: 'synco_meter_app',
+            command: 'RELAY_SET',
+            roomIndex: idx,
+            deviceCode: targetId,
+            relayState: nextRelay,
+            timestamp: new Date().toISOString(),
+          });
           return {
             ...node,
             relayState: nextRelay,
@@ -443,8 +531,16 @@ export const HemsProvider: React.FC<{
 
   const extendCutoff = (id: string, minutes: number = 30) => {
     setNodes((prev) =>
-      prev.map((node) => {
+      prev.map((node, idx) => {
         if (node.id === id) {
+          void RealtimeService.sendPrototypeCommand({
+            source: 'synco_meter_app',
+            command: 'EXTEND_CUTOFF',
+            roomIndex: idx,
+            deviceCode: node.code || supabaseDeviceId,
+            extendMinutes: minutes,
+            timestamp: new Date().toISOString(),
+          });
           return {
             ...node,
             cutoffPending: true,
@@ -625,6 +721,8 @@ export const HemsProvider: React.FC<{
         isSupabaseConnected,
         supabaseDeviceId,
         isHardwareTelemetryActive,
+        isPrototypeLinked,
+        prototypeAlerts,
       }}
     >
       {children}

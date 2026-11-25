@@ -1,9 +1,17 @@
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabase } from './supabaseClient';
-import { TelemetryReading } from '../types/telemetry';
+import {
+  TelemetryReading,
+  PrototypeBridgePayload,
+  PrototypeCommandPayload,
+} from '../types/telemetry';
+
+const PROTOTYPE_CHANNEL_NAME = 'synco_prototype_bridge';
 
 export class RealtimeService {
   private static channel: RealtimeChannel | null = null;
+  private static prototypeChannel: RealtimeChannel | null = null;
+  private static localBroadcast: BroadcastChannel | null = null;
 
   /**
    * Fetch the latest energy reading from Supabase DB
@@ -281,6 +289,122 @@ export class RealtimeService {
     } catch (err) {
       console.error('[RealtimeService] Error toggling relay:', err);
       return false;
+    }
+  }
+
+  /**
+   * Subscribe to the bidirectional 3D Hardware Prototype bridge (Supabase Realtime + local BroadcastChannel fallback)
+   */
+  public static subscribeToPrototypeBridge(
+    onSnapshot: (snapshot: PrototypeBridgePayload) => void
+  ) {
+    this.unsubscribePrototypeBridge();
+
+    const handleIncoming = (raw: unknown) => {
+      if (
+        raw &&
+        typeof raw === 'object' &&
+        (raw as PrototypeBridgePayload).source === 'hardware_prototype_3d' &&
+        Array.isArray((raw as PrototypeBridgePayload).rooms)
+      ) {
+        onSnapshot(raw as PrototypeBridgePayload);
+      }
+    };
+
+    // 1. Local browser BroadcastChannel fallback (same-device instant sync even offline)
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        this.localBroadcast = new BroadcastChannel(PROTOTYPE_CHANNEL_NAME);
+        this.localBroadcast.onmessage = (ev) => {
+          handleIncoming(ev.data);
+        };
+      } catch (err) {
+        console.warn('[RealtimeService] Local BroadcastChannel unavailable:', err);
+      }
+    }
+
+    // 2. Supabase Realtime Broadcast (works cross-device: Laptop 3D Prototype <-> Android/Web SYNCO METER)
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    const ch = supabase.channel(PROTOTYPE_CHANNEL_NAME, {
+      config: {
+        broadcast: { self: false, ack: false },
+      },
+    });
+
+    ch.on('broadcast', { event: 'prototype_state' }, (msg) => {
+      if (msg && msg.payload) {
+        handleIncoming(msg.payload);
+      }
+    });
+
+    ch.subscribe((status) => {
+      console.log(`[RealtimeService] Prototype bridge status:`, status);
+      if (status === 'SUBSCRIBED') {
+        void this.sendPrototypeCommand({
+          source: 'synco_meter_app',
+          command: 'REQUEST_SYNC',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+
+    this.prototypeChannel = ch;
+  }
+
+  /**
+   * Send relay or cutoff-extension command from SYNCO METER to the 3D Hardware Prototype
+   */
+  public static async sendPrototypeCommand(cmd: PrototypeCommandPayload): Promise<boolean> {
+    let sent = false;
+
+    if (this.localBroadcast) {
+      try {
+        this.localBroadcast.postMessage(cmd);
+        sent = true;
+      } catch (err) {
+        console.warn('[RealtimeService] Local BroadcastChannel send error:', err);
+      }
+    }
+
+    if (this.prototypeChannel) {
+      try {
+        const res = await this.prototypeChannel.send({
+          type: 'broadcast',
+          event: 'app_command',
+          payload: cmd,
+        });
+        if (res === 'ok') sent = true;
+      } catch (err) {
+        console.warn('[RealtimeService] Prototype bridge command error:', err);
+      }
+    }
+
+    return sent;
+  }
+
+  /**
+   * Unsubscribe prototype bridge
+   */
+  public static unsubscribePrototypeBridge() {
+    if (this.localBroadcast) {
+      try {
+        this.localBroadcast.close();
+      } catch {
+        // ignore
+      }
+      this.localBroadcast = null;
+    }
+
+    const supabase = getSupabase();
+    if (supabase && this.prototypeChannel) {
+      try {
+        supabase.removeChannel(this.prototypeChannel);
+      } catch (e) {
+        console.warn('[RealtimeService] Prototype channel remove error:', e);
+      }
+      this.prototypeChannel = null;
     }
   }
 

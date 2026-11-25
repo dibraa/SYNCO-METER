@@ -26,6 +26,7 @@ export const LiveDashboardScreen = () => {
     setActiveTab,
     isSupabaseConnected,
     isHardwareTelemetryActive,
+    isPrototypeLinked,
   } = useHems();
 
   const today = consumptionRooms.reduce((sum, room) => sum + room.todayKwh, 0);
@@ -34,7 +35,7 @@ export const LiveDashboardScreen = () => {
 
   const node1 = nodes[0];
   const node2 = nodes[1];
-  const isLive = isSupabaseConnected && isHardwareTelemetryActive;
+  const isLive = isPrototypeLinked || (isSupabaseConnected && isHardwareTelemetryActive);
 
   const consumerItems = useMemo(
     () =>

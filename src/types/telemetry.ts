@@ -48,3 +48,51 @@ export interface DailyEnergySummary {
   estimatedCost: number;
   peakPowerWatts: number;
 }
+
+export interface PrototypeRoomAlert {
+  id: string;
+  title: string;
+  description: string;
+  urgent: boolean;
+}
+
+export interface PrototypeRoomSnapshot {
+  roomIndex: number; // 0 = Room 201, 1 = Room 202
+  roomName: string;
+  deviceCode: string;
+  isOnline: boolean;
+  relayState: boolean;
+  occupancy: 'Occupied' | 'Vacant';
+  cardInserted: boolean;
+  motionDetected: boolean;
+  cutoffPending: boolean;
+  cutoffCountdownSeconds: number;
+  voltage: number;
+  current: number;
+  power: number;
+  powerFactor: number;
+  frequency: number;
+  energyKwh: number;
+  savedKwh: number;
+  autoTrips: number;
+  alert?: PrototypeRoomAlert | null;
+}
+
+export interface PrototypeBridgePayload {
+  source: 'hardware_prototype_3d';
+  online: boolean;
+  tariffPerKwh: number;
+  simTime: string;
+  rooms: PrototypeRoomSnapshot[];
+  timestamp: string;
+}
+
+export interface PrototypeCommandPayload {
+  source: 'synco_meter_app';
+  command: 'RELAY_SET' | 'EXTEND_CUTOFF' | 'REQUEST_SYNC';
+  roomIndex?: number;
+  deviceCode?: string;
+  relayState?: boolean;
+  extendMinutes?: number;
+  timestamp: string;
+}

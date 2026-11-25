@@ -22,8 +22,8 @@ const tabs: TabConfig[] = [
 ];
 
 export const BottomNavBar = () => {
-  const { activeTab, setActiveTab, nodes, totalPowerWatts } = useHems();
-  const alertCount = getActiveAlerts(nodes, totalPowerWatts).length;
+  const { activeTab, setActiveTab, nodes, totalPowerWatts, prototypeAlerts } = useHems();
+  const alertCount = getActiveAlerts(nodes, totalPowerWatts, prototypeAlerts).length;
 
   return (
     <View style={styles.bar}>

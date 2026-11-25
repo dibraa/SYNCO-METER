@@ -7,8 +7,9 @@ import { getActiveAlerts } from '../utils/alerts';
 import { colors, radii, spacing, ui } from '../theme/theme';
 
 export const AlertsScreen = () => {
-  const { nodes, totalPowerWatts, todaySavedKwh, setActiveTab, extendCutoff } = useHems();
-  const alerts = getActiveAlerts(nodes, totalPowerWatts);
+  const { nodes, totalPowerWatts, todaySavedKwh, setActiveTab, extendCutoff, prototypeAlerts } =
+    useHems();
+  const alerts = getActiveAlerts(nodes, totalPowerWatts, prototypeAlerts);
 
   return (
     <Screen
