@@ -39,3 +39,14 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Git Workflow
+
+After completing any code or documentation task (once typecheck and lint pass), automatically create a local git commit:
+
+1. Verify `.\node_modules\.bin\tsc --noEmit` and `.\node_modules\.bin\eslint App.tsx index.ts src` both exit `0`.
+2. Inspect `git status --short` and confirm no secrets or build artifacts (`.env`, `.env*.local`, `dist/`) are staged.
+3. Stage only task-relevant files and commit using Conventional Commits (`<type>(<scope>): <imperative summary>`, ≤72 chars, terse body only for non-obvious why or migrations).
+4. Keep commits local — run `git push` only when the user explicitly requests pushing.
+5. Skip commits on read-only questions, investigations, and unapproved `/plan` drafts. Report the short commit hash in the final response.
+
