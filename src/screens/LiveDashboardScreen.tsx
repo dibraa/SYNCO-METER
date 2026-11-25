@@ -45,7 +45,12 @@ export const LiveDashboardScreen = () => {
         kwh: consumptionRooms.find((r) => r.roomId === node.id)?.todayKwh ?? node.todayKwh,
         activePowerWatts: node.activePowerWatts,
         relayState: node.relayState,
-        icon: (index === 0 ? 'sofa-outline' : 'bed-outline') as keyof typeof MaterialCommunityIcons.glyphMap,
+        icon: (node.icon ||
+          (index === 0
+            ? 'sofa-outline'
+            : index === 1
+            ? 'bed-outline'
+            : 'power-socket-eu')) as keyof typeof MaterialCommunityIcons.glyphMap,
       })),
     [nodes, consumptionRooms]
   );
@@ -108,7 +113,11 @@ export const LiveDashboardScreen = () => {
               style={({ pressed }) => [styles.quickTile, pressed && styles.pressed]}
             >
               <View style={[styles.tileIconWrap, { backgroundColor: colors.primarySoft }]}>
-                <MaterialCommunityIcons name="sofa-outline" size={20} color={colors.primaryText} />
+                <MaterialCommunityIcons
+                  name={node1.icon || 'sofa-outline'}
+                  size={20}
+                  color={colors.primaryText}
+                />
               </View>
               <View style={ui.grow}>
                 <Text style={styles.tileTitle} numberOfLines={1}>
@@ -119,7 +128,25 @@ export const LiveDashboardScreen = () => {
                 </Text>
               </View>
             </Pressable>
-          ) : null}
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setActiveTab('appliances')}
+              style={({ pressed }) => [styles.quickTile, pressed && styles.pressed]}
+            >
+              <View style={[styles.tileIconWrap, { backgroundColor: colors.primarySoft }]}>
+                <MaterialCommunityIcons name="plus" size={20} color={colors.primaryText} />
+              </View>
+              <View style={ui.grow}>
+                <Text style={styles.tileTitle} numberOfLines={1}>
+                  Add Plug
+                </Text>
+                <Text style={styles.tileMeta} numberOfLines={1}>
+                  Connect ESP32 node
+                </Text>
+              </View>
+            </Pressable>
+          )}
 
           {node2 ? (
             <Pressable
@@ -138,7 +165,7 @@ export const LiveDashboardScreen = () => {
                 ]}
               >
                 <MaterialCommunityIcons
-                  name={node2.cutoffPending ? 'timer-sand' : 'bed-outline'}
+                  name={node2.cutoffPending ? 'timer-sand' : node2.icon || 'bed-outline'}
                   size={20}
                   color={node2.cutoffPending ? colors.warningText : colors.textSecondary}
                 />
@@ -162,7 +189,29 @@ export const LiveDashboardScreen = () => {
                 </Text>
               </View>
             </Pressable>
-          ) : null}
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setActiveTab('appliances')}
+              style={({ pressed }) => [styles.quickTile, pressed && styles.pressed]}
+            >
+              <View style={[styles.tileIconWrap, { backgroundColor: colors.surfaceMuted }]}>
+                <MaterialCommunityIcons
+                  name="power-socket-eu"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </View>
+              <View style={ui.grow}>
+                <Text style={styles.tileTitle} numberOfLines={1}>
+                  Plugs ({nodes.length})
+                </Text>
+                <Text style={styles.tileMeta} numberOfLines={1}>
+                  Manage devices
+                </Text>
+              </View>
+            </Pressable>
+          )}
         </View>
 
         {/* Electricity Total Smooth Area Chart */}
@@ -186,8 +235,12 @@ export const LiveDashboardScreen = () => {
           />
         </Section>
 
-        {/* Quick Room Controls (Retains direct relay toggle & 30m extend on Home) */}
-        <Section title="Room Controls">
+        {/* Quick Room Controls */}
+        <Section
+          title="Room Controls"
+          actionLabel="Manage"
+          onAction={() => setActiveTab('appliances')}
+        >
           {nodes.map((node) => (
             <RoomSummary
               key={node.id}

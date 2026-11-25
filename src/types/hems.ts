@@ -2,12 +2,29 @@ export type TabType = 'home' | 'usage' | 'appliances' | 'alerts' | 'settings';
 
 export type SystemMode = 'Auto' | 'Eco' | 'Manual';
 
+export type PlugIconName =
+  | 'sofa-outline'
+  | 'bed-outline'
+  | 'air-conditioner'
+  | 'fridge-outline'
+  | 'television'
+  | 'desk-lamp'
+  | 'power-socket-eu';
+
+export interface PlugInput {
+  name: string;
+  location: string;
+  code: string;
+  icon?: PlugIconName;
+}
+
 export interface SmartNode {
   id: string;
   name: string;
   location: string;
   code: string;
   hardware: string; // 'PZEM-004T v3.0'
+  icon?: PlugIconName;
   isOnline: boolean;
   relayState: boolean;
   occupancy: 'Occupied' | 'Vacant';

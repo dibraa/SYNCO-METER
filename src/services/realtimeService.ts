@@ -13,13 +13,12 @@ export class RealtimeService {
     if (!supabase) return null;
 
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('energy_readings')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(1);
 
-      const { data, error } = await query;
       if (error) {
         console.warn('[RealtimeService] Could not fetch latest reading:', error.message);
         return null;
@@ -73,6 +72,98 @@ export class RealtimeService {
   }
 
   /**
+   * Create or update a smart plug device in public.devices
+   */
+  public static async upsertDevice(device: {
+    deviceIdStr: string;
+    name: string;
+    relayState?: boolean;
+  }): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+
+    try {
+      const { error } = await supabase.from('devices').upsert(
+        {
+          device_id_str: device.deviceIdStr,
+          name: device.name,
+          relay_state: device.relayState ?? true,
+          is_online: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'device_id_str' }
+      );
+      if (error) {
+        console.warn('[RealtimeService] Could not upsert device:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('[RealtimeService] Error upserting device:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Rename (or update device_id_str of) an existing smart plug in public.devices
+   */
+  public static async renameDevice(
+    oldDeviceIdStr: string,
+    updates: { name: string; newDeviceIdStr?: string }
+  ): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+
+    try {
+      const payload: Record<string, unknown> = {
+        name: updates.name,
+        updated_at: new Date().toISOString(),
+      };
+      if (updates.newDeviceIdStr && updates.newDeviceIdStr !== oldDeviceIdStr) {
+        payload.device_id_str = updates.newDeviceIdStr;
+      }
+
+      const { error } = await supabase
+        .from('devices')
+        .update(payload)
+        .eq('device_id_str', oldDeviceIdStr);
+
+      if (error) {
+        console.warn('[RealtimeService] Could not rename device:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('[RealtimeService] Error renaming device:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Delete a smart plug device from public.devices
+   */
+  public static async deleteDevice(deviceIdStr: string): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+
+    try {
+      const { error } = await supabase
+        .from('devices')
+        .delete()
+        .eq('device_id_str', deviceIdStr);
+
+      if (error) {
+        console.warn('[RealtimeService] Could not delete device:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('[RealtimeService] Error deleting device:', err);
+      return false;
+    }
+  }
+
+  /**
    * Subscribe to live real-time telemetry events from Supabase
    */
   public static subscribeToTelemetry(
@@ -86,7 +177,6 @@ export class RealtimeService {
       return;
     }
 
-    // Clean up existing channel if active
     if (this.channel) {
       try {
         supabase.removeChannel(this.channel);
@@ -99,14 +189,12 @@ export class RealtimeService {
     const channelName = `meter_${deviceId || 'ESP32-PZEM-DEV-01'}`;
     this.channel = supabase.channel(channelName);
 
-    // 1. Listen for ultra-fast broadcast events (ESP32 -> Mobile UI)
     this.channel.on('broadcast', { event: 'telemetry_stream' }, (payload) => {
       if (payload && payload.payload) {
         onReadingReceived(payload.payload as TelemetryReading);
       }
     });
 
-    // 2. Listen for DB postgres_changes on energy_readings table
     this.channel.on(
       'postgres_changes',
       {
@@ -134,7 +222,6 @@ export class RealtimeService {
       }
     );
 
-    // 3. Listen for relay state modifications in devices table
     this.channel.on(
       'postgres_changes',
       {
@@ -165,7 +252,6 @@ export class RealtimeService {
     try {
       const targetId = deviceId || 'ESP32-PZEM-DEV-01';
 
-      // 1. Update database state
       const { error: dbError } = await supabase
         .from('devices')
         .update({
@@ -178,7 +264,6 @@ export class RealtimeService {
         console.warn('[RealtimeService] Could not update device row directly:', dbError.message);
       }
 
-      // 2. Broadcast immediate command event over realtime channel for <100ms response
       if (this.channel) {
         await this.channel.send({
           type: 'broadcast',

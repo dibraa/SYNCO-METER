@@ -11,12 +11,14 @@ import {
   onSupabaseConfigChange,
 } from '../services/supabaseClient';
 import { SupabaseConfigModal } from '../components/SupabaseConfigModal';
+import { PrintableReportModal } from '../components/PrintableReportModal';
 
 export const ProfileScreen = () => {
   const { signOut, report } = useHems();
   const [notifications, setNotifications] = useState(true);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [configModalVisible, setConfigModalVisible] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
 
   const [userEmail, setUserEmail] = useState<string>('guest@syncometer.local');
   const [userName, setUserName] = useState<string>('Demo User');
@@ -175,6 +177,25 @@ export const ProfileScreen = () => {
           <View style={ui.divider} />
 
           <SettingRow
+            label="Printable Energy Report"
+            value="Preview, print, save PDF or CSV"
+            icon="printer-outline"
+            iconBg={colors.primarySoft}
+            iconColor={colors.primaryText}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open printable energy report"
+              onPress={() => setReportModalVisible(true)}
+              style={({ pressed }) => [ui.pill, pressed && { opacity: 0.78 }]}
+            >
+              <Text style={ui.pillText}>Open</Text>
+            </Pressable>
+          </SettingRow>
+
+          <View style={ui.divider} />
+
+          <SettingRow
             label="Cutoff reminders"
             icon="timer-outline"
             iconBg={colors.warningSoft}
@@ -269,6 +290,12 @@ export const ProfileScreen = () => {
           setIsCloudLinked(Boolean(cfg.url && cfg.anonKey));
           setDeviceId(cfg.deviceId);
         }}
+      />
+
+      {/* Printable Energy Report Modal */}
+      <PrintableReportModal
+        visible={reportModalVisible}
+        onClose={() => setReportModalVisible(false)}
       />
     </Screen>
   );

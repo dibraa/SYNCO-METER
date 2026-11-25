@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Screen, Section } from '../components/Screen';
@@ -7,12 +7,21 @@ import { useHems } from '../context/HemsContext';
 import { EnergyAreaChart } from '../components/EnergyAreaChart';
 import { TopConsumersCard } from '../components/TopConsumersCard';
 import { DualBarChart } from '../components/DualBarChart';
+import { PrintableReportModal } from '../components/PrintableReportModal';
 import { combineHourly, formatCost } from '../utils/consumption';
 
 export const ConsumptionAnalyticsScreen: React.FC = () => {
   const { consumptionRooms: rooms, nodes, report, todaySavedKwh, setActiveTab } = useHems();
   const [period, setPeriod] = useState<'day' | 'month'>('day');
   const [roomId, setRoomId] = useState('all');
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+
+  // Reset selected room filter if that plug was deleted
+  useEffect(() => {
+    if (roomId !== 'all' && !rooms.some((r) => r.roomId === roomId)) {
+      setRoomId('all');
+    }
+  }, [roomId, rooms]);
 
   const tariff = report.tariffPerKwh;
   const total = rooms.reduce(
@@ -38,14 +47,33 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
           kwh: period === 'day' ? room.todayKwh : room.monthKwh,
           activePowerWatts: node?.activePowerWatts,
           relayState: node?.relayState,
-          icon: (idx === 0 ? 'sofa-outline' : 'bed-outline') as keyof typeof MaterialCommunityIcons.glyphMap,
+          icon: (node?.icon ||
+            (idx === 0
+              ? 'sofa-outline'
+              : idx === 1
+              ? 'bed-outline'
+              : 'power-socket-eu')) as keyof typeof MaterialCommunityIcons.glyphMap,
         };
       }),
     [rooms, nodes, period]
   );
 
   return (
-    <Screen title="Usage" subtitle={`${date ?? 'Today'} · Manila time`}>
+    <Screen
+      title="Usage"
+      subtitle={`${date ?? 'Today'} · Manila time`}
+      headerRight={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open printable report"
+          onPress={() => setReportModalVisible(true)}
+          style={({ pressed }) => [styles.reportHeaderBtn, pressed && { opacity: 0.8 }]}
+        >
+          <MaterialCommunityIcons name="printer-outline" size={16} color={colors.primaryText} />
+          <Text style={styles.reportHeaderText}>Report</Text>
+        </Pressable>
+      }
+    >
       {/* Segmented Period Selector */}
       <View style={styles.periodTrack}>
         {(['day', 'month'] as const).map((value) => {
@@ -67,7 +95,7 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
         })}
       </View>
 
-      {/* Electricity Total Section (Inspo Screen 2) */}
+      {/* Electricity Total Section */}
       <Section title="Electricity Total" pill={formatCost(total, tariff)}>
         <EnergyAreaChart
           data={hours}
@@ -76,11 +104,11 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
           tariffPerKwh={tariff}
         />
         <Text style={styles.footnote}>
-          Estimated at {formatCost(1, tariff)}/kWh · Demo snapshot synced with room nodes
+          Estimated at {formatCost(1, tariff)}/kWh · Synced with active smart plugs
         </Text>
       </Section>
 
-      {/* Top Consumers Ranked Section (Inspo Screen 3) */}
+      {/* Top Consumers Ranked Section */}
       <Section title="Top Consumers">
         <TopConsumersCard
           items={consumerItems}
@@ -90,7 +118,7 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
         />
       </Section>
 
-      {/* Hourly Intensity Capsule Chart (Inspo Screen 3 Electricity Prices) */}
+      {/* Hourly Intensity Capsule Chart */}
       <Section title="Hourly Load Intensity" pill={`${formatCost(1, tariff)}/kWh`}>
         <View style={ui.card}>
           <ScrollView
@@ -128,11 +156,57 @@ export const ConsumptionAnalyticsScreen: React.FC = () => {
           />
         </View>
       </Section>
+
+      {/* Printable Energy Audit Report Card */}
+      <Section title="Energy Audit Report">
+        <View style={ui.card}>
+          <View style={ui.row}>
+            <View style={styles.reportCardIcon}>
+              <MaterialCommunityIcons name="file-document-outline" size={22} color={colors.primary} />
+            </View>
+            <View style={ui.grow}>
+              <Text style={styles.reportCardTitle}>Printable Report &amp; CSV Export</Text>
+              <Text style={ui.muted}>
+                Preview, print, save as PDF, or export a spreadsheet of your plug telemetry and
+                costs.
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setReportModalVisible(true)}
+            style={({ pressed }) => [ui.softButton, pressed && { opacity: 0.8 }]}
+          >
+            <MaterialCommunityIcons name="printer" size={18} color={colors.primaryText} />
+            <Text style={ui.softButtonText}>Preview &amp; Print Report</Text>
+          </Pressable>
+        </View>
+      </Section>
+
+      <PrintableReportModal
+        visible={reportModalVisible}
+        initialPeriod={period}
+        onClose={() => setReportModalVisible(false)}
+      />
     </Screen>
   );
 };
 
 const styles = StyleSheet.create({
+  reportHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 11,
+    minHeight: 36,
+    borderRadius: radii.pill,
+  },
+  reportHeaderText: {
+    color: colors.primaryText,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   periodTrack: {
     flexDirection: 'row',
     backgroundColor: colors.border,
@@ -189,5 +263,18 @@ const styles = StyleSheet.create({
   filterTextActive: {
     color: colors.primaryText,
     fontWeight: '700',
+  },
+  reportCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
   },
 });

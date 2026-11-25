@@ -13,16 +13,23 @@ export function RoomSummary({
   detailed = false,
   onToggle,
   onExtend,
+  onEdit,
+  onDelete,
 }: {
   node: SmartNode;
   detailed?: boolean;
   onToggle: () => void;
   onExtend: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
-  const isLiving = node.id === 'node-1';
-  const iconName: keyof typeof MaterialCommunityIcons.glyphMap = isLiving
-    ? 'sofa-outline'
-    : 'bed-outline';
+  const iconName: keyof typeof MaterialCommunityIcons.glyphMap =
+    node.icon ||
+    (node.id === 'node-1'
+      ? 'sofa-outline'
+      : node.id === 'node-2'
+      ? 'bed-outline'
+      : 'power-socket-eu');
 
   const iconBg = !node.relayState
     ? colors.surfaceMuted
@@ -137,6 +144,33 @@ export function RoomSummary({
             />
             <Text style={styles.extendText}>Keep on for 30 minutes</Text>
           </Pressable>
+        </View>
+      ) : null}
+
+      {onEdit || onDelete ? (
+        <View style={styles.manageRow}>
+          {onEdit ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Rename ${node.name}`}
+              onPress={onEdit}
+              style={({ pressed }) => [styles.editChip, pressed && { opacity: 0.78 }]}
+            >
+              <MaterialCommunityIcons name="pencil-outline" size={15} color={colors.primaryText} />
+              <Text style={styles.editChipText}>Rename</Text>
+            </Pressable>
+          ) : null}
+          {onDelete ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Delete ${node.name}`}
+              onPress={onDelete}
+              style={({ pressed }) => [styles.deleteChip, pressed && { opacity: 0.78 }]}
+            >
+              <MaterialCommunityIcons name="trash-can-outline" size={15} color={colors.danger} />
+              <Text style={styles.deleteChipText}>Delete</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -273,6 +307,41 @@ const styles = StyleSheet.create({
     color: colors.warningText,
     fontWeight: '700',
     fontSize: 13,
+  },
+  manageRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 2,
+  },
+  editChip: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 10,
+    backgroundColor: colors.primarySoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  editChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primaryText,
+  },
+  deleteChip: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: colors.dangerSoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  deleteChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.danger,
   },
   specGrid: {
     flexDirection: 'row',

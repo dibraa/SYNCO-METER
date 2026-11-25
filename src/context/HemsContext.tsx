@@ -1,5 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { SmartNode, TabType, SystemMode, HemsReport, DailyLog, HourlyDistribution } from '../types/hems';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  SmartNode,
+  TabType,
+  SystemMode,
+  HemsReport,
+  DailyLog,
+  HourlyDistribution,
+  PlugInput,
+} from '../types/hems';
 import { createConsumptionSnapshot, RoomConsumption } from '../utils/consumption';
 import {
   isSupabaseConfigured,
@@ -7,6 +16,60 @@ import {
   onSupabaseConfigChange,
 } from '../services/supabaseClient';
 import { RealtimeService } from '../services/realtimeService';
+
+const STORAGE_KEY_NODES = '@synco_smart_nodes_v1';
+
+const DEFAULT_NODES: SmartNode[] = [
+  {
+    id: 'node-1',
+    name: 'Room 1 Plug',
+    location: 'Living Room Plug',
+    code: 'ESP32-PZEM-DEV-01',
+    hardware: 'PZEM-004T v3.0',
+    icon: 'sofa-outline',
+    isOnline: true,
+    relayState: true,
+    occupancy: 'Occupied',
+    cutoffPending: false,
+    cutoffCountdownSeconds: 0,
+    voltage: 228.4,
+    current: 3.82,
+    activePowerWatts: 860,
+    powerFactor: 0.96,
+    frequency: 60.0,
+    todayKwh: 5.14,
+    monthKwh: 135.4,
+    todayCost: 61.68,
+    sharePercentage: 62,
+    peakSpikeWatts: 1480,
+    autoTrips: 28,
+    standbyBleedWatts: 18,
+  },
+  {
+    id: 'node-2',
+    name: 'Room 2 Plug',
+    location: 'Bedroom Plug',
+    code: 'BR-PLUG-B',
+    hardware: 'PZEM-004T v3.0',
+    icon: 'bed-outline',
+    isOnline: true,
+    relayState: true,
+    occupancy: 'Vacant',
+    cutoffPending: true,
+    cutoffCountdownSeconds: 218, // 03:38
+    voltage: 228.4,
+    current: 2.4,
+    activePowerWatts: 560,
+    powerFactor: 0.95,
+    frequency: 60.0,
+    todayKwh: 3.28,
+    monthKwh: 83.0,
+    todayCost: 39.36,
+    sharePercentage: 38,
+    peakSpikeWatts: 920,
+    autoTrips: 35,
+  },
+];
 
 interface HemsContextType {
   consumptionRooms: RoomConsumption[];
@@ -17,6 +80,9 @@ interface HemsContextType {
   nodes: SmartNode[];
   toggleNodeRelay: (id: string) => void;
   extendCutoff: (id: string, minutes?: number) => void;
+  addPlug: (input: PlugInput) => Promise<void>;
+  renamePlug: (id: string, input: PlugInput) => Promise<void>;
+  deletePlug: (id: string) => Promise<void>;
   report: HemsReport;
   dailyLogs: DailyLog[];
   hourlyDistribution: HourlyDistribution[];
@@ -37,13 +103,30 @@ interface HemsContextType {
 
 const HemsContext = createContext<HemsContextType | undefined>(undefined);
 
+function baseWattsForNode(node: SmartNode): number {
+  if (node.id === 'node-1') return 860;
+  if (node.id === 'node-2') return 560;
+  if (node.icon === 'air-conditioner') return 980;
+  if (node.icon === 'fridge-outline') return 180;
+  if (node.icon === 'television') return 145;
+  if (node.icon === 'desk-lamp') return 95;
+  return 240;
+}
+
+async function persistNodes(nextNodes: SmartNode[]) {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY_NODES, JSON.stringify(nextNodes));
+  } catch (err) {
+    console.warn('[HemsContext] Failed to persist nodes:', err);
+  }
+}
+
 export const HemsProvider: React.FC<{
   children: React.ReactNode;
   onSignOut?: () => void;
 }> = ({ children, onSignOut }) => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
 
-  // Ensure activeTab is always a valid tab
   useEffect(() => {
     const validTabs: TabType[] = ['home', 'usage', 'appliances', 'alerts', 'settings'];
     if (!validTabs.includes(activeTab)) {
@@ -55,70 +138,67 @@ export const HemsProvider: React.FC<{
   const [ruleApplied, setRuleApplied] = useState(false);
 
   const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(isSupabaseConfigured());
-  const [supabaseDeviceId, setSupabaseDeviceId] = useState<string>(getLoadedConfig().deviceId || 'ESP32-PZEM-DEV-01');
+  const [supabaseDeviceId, setSupabaseDeviceId] = useState<string>(
+    getLoadedConfig().deviceId || 'ESP32-PZEM-DEV-01'
+  );
   const [isHardwareTelemetryActive, setIsHardwareTelemetryActive] = useState(false);
   const lastHardwareTimestamp = useRef<number>(0);
 
-  const [nodes, setNodes] = useState<SmartNode[]>([
-    {
-      id: 'node-1',
-      name: 'Room 1 Plug',
-      location: 'Living Room Plug',
-      code: 'ESP32-PZEM-DEV-01',
-      hardware: 'PZEM-004T v3.0',
-      isOnline: true,
-      relayState: true,
-      occupancy: 'Occupied',
-      cutoffPending: false,
-      cutoffCountdownSeconds: 0,
-      voltage: 228.4,
-      current: 3.82,
-      activePowerWatts: 860,
-      powerFactor: 0.96,
-      frequency: 60.0,
-      todayKwh: 5.14,
-      monthKwh: 135.4,
-      todayCost: 61.68,
-      sharePercentage: 62,
-      peakSpikeWatts: 1480,
-      autoTrips: 28,
-      standbyBleedWatts: 18,
-    },
-    {
-      id: 'node-2',
-      name: 'Room 2 Plug',
-      location: 'Bedroom Plug',
-      code: 'BR-PLUG-B',
-      hardware: 'PZEM-004T v3.0',
-      isOnline: true,
-      relayState: true,
-      occupancy: 'Vacant',
-      cutoffPending: true,
-      cutoffCountdownSeconds: 218, // 03:38
-      voltage: 228.4,
-      current: 2.40,
-      activePowerWatts: 560,
-      powerFactor: 0.95,
-      frequency: 60.0,
-      todayKwh: 3.28,
-      monthKwh: 83.0,
-      todayCost: 39.36,
-      sharePercentage: 38,
-      peakSpikeWatts: 920,
-      autoTrips: 35,
-    },
-  ]);
+  const [nodes, setNodes] = useState<SmartNode[]>(DEFAULT_NODES);
+  const snapshotCacheRef = useRef<Map<string, RoomConsumption>>(new Map());
+  const snapshotAnchorRef = useRef<Date>(new Date());
 
-  const [consumptionRooms] = useState(() => createConsumptionSnapshot(nodes));
+  // Hydrate saved plugs from AsyncStorage on mount
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(STORAGE_KEY_NODES)
+      .then((raw) => {
+        if (!mounted || !raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setNodes(parsed);
+        }
+      })
+      .catch((err) => {
+        console.warn('[HemsContext] Could not load saved plugs:', err);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  const [report] = useState<HemsReport>({
-    month: 'February 2025',
+  // Derive consumptionRooms dynamically so add / rename / delete updates Usage & Reports immediately
+  const consumptionRooms = useMemo(() => {
+    const cache = snapshotCacheRef.current;
+    const missing = nodes.filter((n) => !cache.has(n.id));
+    if (missing.length > 0) {
+      const generated = createConsumptionSnapshot(missing, snapshotAnchorRef.current);
+      generated.forEach((entry) => cache.set(entry.roomId, entry));
+    }
+
+    return nodes.map((node) => {
+      const cached = cache.get(node.id);
+      if (cached) {
+        return {
+          ...cached,
+          name: node.name,
+          location: node.location,
+        };
+      }
+      const [fresh] = createConsumptionSnapshot([node], snapshotAnchorRef.current);
+      cache.set(node.id, fresh);
+      return fresh;
+    });
+  }, [nodes]);
+
+  const [baseReport] = useState<HemsReport>({
+    month: 'November 2026',
     totalKwh: 218.4,
     benchmarkDiffPercent: -8.2,
-    totalCost: 2620.80,
-    tariffPerKwh: 12.00,
+    totalCost: 2620.8,
+    tariffPerKwh: 12.0,
     autoSavedKwh: 52.8,
-    reclaimedCost: 633.60,
+    reclaimedCost: 633.6,
     efficiencyScore: 88,
     selfPoweredPercent: 88,
     gridDependencePercent: 12,
@@ -128,20 +208,20 @@ export const HemsProvider: React.FC<{
 
   const [dailyLogs] = useState<DailyLog[]>([
     {
-      date: 'Today, Feb 24',
+      date: 'Today',
       kwh: 8.42,
       savedKwh: 1.4,
       breakdown: 'R1: 5.14 kWh • R2: 3.28 kWh',
     },
     {
-      date: 'Yesterday, Feb 23',
+      date: 'Yesterday',
       kwh: 9.15,
       savedKwh: 1.8,
       breakdown: 'R1: 5.61 kWh • R2: 3.54 kWh',
     },
     {
-      date: 'Thursday, Feb 22',
-      kwh: 7.80,
+      date: '2 days ago',
+      kwh: 7.8,
       savedKwh: 2.1,
       breakdown: 'R1: 4.90 kWh • R2: 2.90 kWh',
     },
@@ -174,14 +254,16 @@ export const HemsProvider: React.FC<{
       const devId = getLoadedConfig().deviceId || 'ESP32-PZEM-DEV-01';
       setSupabaseDeviceId(devId);
 
-      // 1. Initial snapshot fetch from database
+      const isTargetNode = (node: SmartNode, index: number) =>
+        node.code === devId || (index === 0 && node.id === 'node-1');
+
       RealtimeService.fetchLatestReading(devId).then((reading) => {
         if (reading) {
           lastHardwareTimestamp.current = Date.now();
           setIsHardwareTelemetryActive(true);
           setNodes((prev) =>
-            prev.map((node) => {
-              if (node.id === 'node-1') {
+            prev.map((node, idx) => {
+              if (isTargetNode(node, idx)) {
                 return {
                   ...node,
                   voltage: reading.voltage,
@@ -198,26 +280,24 @@ export const HemsProvider: React.FC<{
         }
       });
 
-      // 2. Fetch device relay status
       RealtimeService.fetchDevice(devId).then((device) => {
         if (device && typeof device.relay_state === 'boolean') {
           setNodes((prev) =>
-            prev.map((node) =>
-              node.id === 'node-1' ? { ...node, relayState: device.relay_state } : node
+            prev.map((node, idx) =>
+              isTargetNode(node, idx) ? { ...node, relayState: device.relay_state } : node
             )
           );
         }
       });
 
-      // 3. Subscribe to real-time events (broadcast + postgres_changes)
       RealtimeService.subscribeToTelemetry(
         devId,
         (reading) => {
           lastHardwareTimestamp.current = Date.now();
           setIsHardwareTelemetryActive(true);
           setNodes((prev) =>
-            prev.map((node) => {
-              if (node.id === 'node-1') {
+            prev.map((node, idx) => {
+              if (isTargetNode(node, idx)) {
                 return {
                   ...node,
                   voltage: reading.voltage,
@@ -226,7 +306,8 @@ export const HemsProvider: React.FC<{
                   powerFactor: reading.powerFactor,
                   frequency: reading.frequency,
                   todayKwh: reading.energy > 0 ? reading.energy : node.todayKwh,
-                  relayState: reading.relayState !== undefined ? reading.relayState : node.relayState,
+                  relayState:
+                    reading.relayState !== undefined ? reading.relayState : node.relayState,
                 };
               }
               return node;
@@ -235,12 +316,14 @@ export const HemsProvider: React.FC<{
         },
         (newRelayState) => {
           setNodes((prev) =>
-            prev.map((node) => {
-              if (node.id === 'node-1') {
+            prev.map((node, idx) => {
+              if (isTargetNode(node, idx)) {
                 return {
                   ...node,
                   relayState: newRelayState,
-                  activePowerWatts: newRelayState ? node.activePowerWatts || 860 : 0,
+                  activePowerWatts: newRelayState
+                    ? node.activePowerWatts || baseWattsForNode(node)
+                    : 0,
                 };
               }
               return node;
@@ -281,17 +364,16 @@ export const HemsProvider: React.FC<{
           if (isCutoffPending && countdown > 0) {
             countdown -= 1;
             if (countdown === 0) {
-              // Trigger auto-cutoff
               relay = false;
               isCutoffPending = false;
-              if (isSupabaseConfigured() && node.id === 'node-1') {
-                RealtimeService.toggleRelay(supabaseDeviceId, false);
+              if (isSupabaseConfigured()) {
+                RealtimeService.toggleRelay(node.code || supabaseDeviceId, false);
               }
             }
           }
 
-          // If node-1 has recent real live hardware data from Supabase, preserve it
-          if (node.id === 'node-1' && hasRecentLiveTelemetry) {
+          const isLivePrimary = node.code === supabaseDeviceId && hasRecentLiveTelemetry;
+          if (isLivePrimary) {
             return {
               ...node,
               relayState: relay,
@@ -300,7 +382,6 @@ export const HemsProvider: React.FC<{
             };
           }
 
-          // Otherwise natural electrical simulation
           const vNoise = (Math.random() - 0.5) * 0.8;
           const voltage = +(228.4 + vNoise).toFixed(1);
 
@@ -316,9 +397,9 @@ export const HemsProvider: React.FC<{
             };
           }
 
-          const basePower = node.id === 'node-1' ? 860 : 560;
+          const basePower = baseWattsForNode(node);
           const pNoise = (Math.random() - 0.5) * 16;
-          const activePowerWatts = Math.round(basePower + pNoise);
+          const activePowerWatts = Math.max(0, Math.round(basePower + pNoise));
           const current = +(activePowerWatts / (voltage * node.powerFactor)).toFixed(2);
 
           return {
@@ -338,27 +419,26 @@ export const HemsProvider: React.FC<{
   }, [isHardwareTelemetryActive, supabaseDeviceId]);
 
   const toggleNodeRelay = (id: string) => {
-    setNodes((prev) =>
-      prev.map((node) => {
+    setNodes((prev) => {
+      const next = prev.map((node) => {
         if (node.id === id) {
           const nextRelay = !node.relayState;
-
-          // Dispatch command to Supabase
           if (isSupabaseConfigured()) {
             const targetId = node.code || supabaseDeviceId;
             RealtimeService.toggleRelay(targetId, nextRelay);
           }
-
           return {
             ...node,
             relayState: nextRelay,
             cutoffPending: false,
-            activePowerWatts: nextRelay ? (node.id === 'node-1' ? 860 : 560) : 0,
+            activePowerWatts: nextRelay ? baseWattsForNode(node) : 0,
           };
         }
         return node;
-      })
-    );
+      });
+      persistNodes(next);
+      return next;
+    });
   };
 
   const extendCutoff = (id: string, minutes: number = 30) => {
@@ -376,17 +456,137 @@ export const HemsProvider: React.FC<{
     );
   };
 
+  const addPlug = async (input: PlugInput) => {
+    const cleanName = input.name.trim();
+    const cleanLocation = input.location.trim();
+    const cleanCode = input.code.trim().toUpperCase();
+    const icon = input.icon || 'power-socket-eu';
+    const initialNodeBase: SmartNode = {
+      id: `node-${Date.now()}`,
+      name: cleanName,
+      location: cleanLocation,
+      code: cleanCode,
+      hardware: 'PZEM-004T v3.0',
+      icon,
+      isOnline: true,
+      relayState: true,
+      occupancy: 'Occupied',
+      cutoffPending: false,
+      cutoffCountdownSeconds: 0,
+      voltage: 228.4,
+      current: 1.09,
+      activePowerWatts: 240,
+      powerFactor: 0.96,
+      frequency: 60.0,
+      todayKwh: 1.45,
+      monthKwh: 38.2,
+      todayCost: +(1.45 * baseReport.tariffPerKwh).toFixed(2),
+      sharePercentage: 0,
+      peakSpikeWatts: 420,
+      autoTrips: 0,
+    };
+
+    const baseW = baseWattsForNode(initialNodeBase);
+    initialNodeBase.activePowerWatts = baseW;
+    initialNodeBase.current = +(baseW / (228.4 * 0.96)).toFixed(2);
+
+    setNodes((prev) => {
+      const next = [...prev, initialNodeBase];
+      persistNodes(next);
+      return next;
+    });
+
+    if (isSupabaseConfigured()) {
+      await RealtimeService.upsertDevice({
+        deviceIdStr: cleanCode,
+        name: cleanName,
+        relayState: true,
+      });
+    }
+  };
+
+  const renamePlug = async (id: string, input: PlugInput) => {
+    const cleanName = input.name.trim();
+    const cleanLocation = input.location.trim();
+    const cleanCode = input.code.trim().toUpperCase();
+    let previousCode = '';
+
+    setNodes((prev) => {
+      const next = prev.map((node) => {
+        if (node.id === id) {
+          previousCode = node.code;
+          return {
+            ...node,
+            name: cleanName,
+            location: cleanLocation,
+            code: cleanCode || node.code,
+            icon: input.icon || node.icon,
+          };
+        }
+        return node;
+      });
+      persistNodes(next);
+      return next;
+    });
+
+    if (isSupabaseConfigured() && previousCode) {
+      await RealtimeService.renameDevice(previousCode, {
+        name: cleanName,
+        newDeviceIdStr: cleanCode || previousCode,
+      });
+    }
+  };
+
+  const deletePlug = async (id: string) => {
+    let targetCode = '';
+
+    setNodes((prev) => {
+      const found = prev.find((n) => n.id === id);
+      targetCode = found?.code || '';
+      const next = prev.filter((node) => node.id !== id);
+      snapshotCacheRef.current.delete(id);
+      persistNodes(next);
+      return next;
+    });
+
+    if (isSupabaseConfigured() && targetCode) {
+      await RealtimeService.deleteDevice(targetCode);
+    }
+  };
+
   const applyStandbyRule = () => {
     setRuleApplied(true);
   };
 
-  const totalPowerWatts = nodes.reduce((sum, n) => sum + (n.relayState ? n.activePowerWatts : 0), 0);
-  const totalCurrentAmps = +nodes.reduce((sum, n) => sum + (n.relayState ? n.current : 0), 0).toFixed(2);
+  const totalPowerWatts = nodes.reduce(
+    (sum, n) => sum + (n.relayState ? n.activePowerWatts : 0),
+    0
+  );
+  const totalCurrentAmps = +nodes
+    .reduce((sum, n) => sum + (n.relayState ? n.current : 0), 0)
+    .toFixed(2);
   const averageVoltage = nodes.length > 0 ? nodes[0].voltage : 228.4;
-  const averagePowerFactor = 0.96;
-  const todayTotalKwh = +(nodes.reduce((sum, n) => sum + n.todayKwh, 0)).toFixed(2);
-  const todayEstimatedCost = +(todayTotalKwh * 12.00).toFixed(2);
-  const todaySavedKwh = 1.85;
+  const averagePowerFactor =
+    nodes.length > 0
+      ? +(nodes.reduce((sum, n) => sum + n.powerFactor, 0) / nodes.length).toFixed(2)
+      : 0.96;
+  const todayTotalKwh = +consumptionRooms
+    .reduce((sum, r) => sum + r.todayKwh, 0)
+    .toFixed(2);
+  const todayEstimatedCost = +(todayTotalKwh * baseReport.tariffPerKwh).toFixed(2);
+  const todaySavedKwh = nodes.length > 0 ? 1.85 : 0;
+
+  const monthTotalKwh = +consumptionRooms
+    .reduce((sum, r) => sum + r.monthKwh, 0)
+    .toFixed(2);
+  const report: HemsReport = useMemo(
+    () => ({
+      ...baseReport,
+      totalKwh: monthTotalKwh,
+      totalCost: +(monthTotalKwh * baseReport.tariffPerKwh).toFixed(2),
+    }),
+    [baseReport, monthTotalKwh]
+  );
 
   const signOut = () => {
     setActiveTab('home');
@@ -406,6 +606,9 @@ export const HemsProvider: React.FC<{
         nodes,
         toggleNodeRelay,
         extendCutoff,
+        addPlug,
+        renamePlug,
+        deletePlug,
         report,
         dailyLogs,
         hourlyDistribution,
