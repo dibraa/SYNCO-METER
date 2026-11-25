@@ -3,17 +3,34 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { HemsProvider } from './src/context/HemsContext';
 import { MainAppNavigator } from './src/screens/MainAppNavigator';
 import { AuthNavigator } from './src/screens/AuthNavigator';
-import { View, StatusBar, ActivityIndicator, Image, Text, StyleSheet } from 'react-native';
+import { ForgotPasswordScreen } from './src/screens/ForgotPasswordScreen';
+import {
+  View,
+  StatusBar,
+  ActivityIndicator,
+  Image,
+  Text,
+  StyleSheet,
+  Platform,
+} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from './src/theme/theme';
+import { colors, shadows } from './src/theme/theme';
 import {
   loadSavedSupabaseConfig,
   getSupabase,
   isSupabaseConfigured,
 } from './src/services/supabaseClient';
 
+function hasWebRecoveryHash(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  const hash = window.location?.hash || '';
+  const search = window.location?.search || '';
+  return hash.includes('type=recovery') || search.includes('type=recovery');
+}
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState<boolean>(hasWebRecoveryHash());
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
@@ -25,18 +42,37 @@ export default function App() {
         const supabase = getSupabase();
 
         if (supabase && isSupabaseConfigured()) {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (isMounted && session) {
-            setIsAuthenticated(true);
-          }
+          const recoveryInUrl = hasWebRecoveryHash();
 
-          const { data: authListener } = supabase.auth.onAuthStateChange(
-            (_event, session) => {
-              if (isMounted) {
-                setIsAuthenticated(Boolean(session));
-              }
+          const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+            if (!isMounted) return;
+            if (event === 'PASSWORD_RECOVERY') {
+              setIsPasswordRecovery(true);
+              setIsAuthenticated(false);
+              return;
             }
-          );
+            if (event === 'SIGNED_OUT') {
+              setIsPasswordRecovery(false);
+              setIsAuthenticated(false);
+              return;
+            }
+            if (session) {
+              setIsAuthenticated(true);
+            }
+          });
+
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
+          if (isMounted) {
+            if (recoveryInUrl) {
+              setIsPasswordRecovery(true);
+              setIsAuthenticated(false);
+            } else if (session) {
+              setIsAuthenticated(true);
+            }
+          }
 
           return () => {
             authListener?.subscription?.unsubscribe();
@@ -68,6 +104,7 @@ export default function App() {
     } catch (err) {
       console.warn('[App] Error signing out of Supabase:', err);
     } finally {
+      setIsPasswordRecovery(false);
       setIsAuthenticated(false);
     }
   };
@@ -75,16 +112,18 @@ export default function App() {
   if (isInitializing) {
     return (
       <View style={styles.splashContainer}>
-        <StatusBar barStyle="dark-content" />
-        <Image
-          source={require('./assets/LOGO.jpg')}
-          style={styles.splashLogo}
-          resizeMode="contain"
-          accessibilityLabel="SYNCO METER Logo"
-        />
+        <StatusBar barStyle="dark-content" backgroundColor={colors.canvas} />
+        <View style={styles.splashLogoFrame}>
+          <Image
+            source={require('./assets/LOGO.jpg')}
+            style={styles.splashLogo}
+            resizeMode="contain"
+            accessibilityLabel="SYNCO METER Logo"
+          />
+        </View>
         <Text style={styles.splashTitle}>SYNCO METER</Text>
-        <Text style={styles.splashSubtitle}>Home Energy Management System</Text>
-        <ActivityIndicator style={{ marginTop: 24 }} size="small" color={colors.green} />
+        <Text style={styles.splashSubtitle}>Smart Home Energy Management</Text>
+        <ActivityIndicator style={{ marginTop: 24 }} size="small" color={colors.primary} />
       </View>
     );
   }
@@ -93,9 +132,18 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar barStyle="dark-content" />
-        <View style={{ flex: 1, backgroundColor: colors.neutral, alignItems: 'center' }}>
-          <SafeAreaView style={{ flex: 1, width: '100%', maxWidth: 520, backgroundColor: colors.surface }}>
-            {isAuthenticated ? (
+        <View style={styles.outerFrame}>
+          <SafeAreaView style={styles.appFrame}>
+            {isPasswordRecovery ? (
+              <ForgotPasswordScreen
+                initialStep="reset"
+                onBackToLogin={handleSignOut}
+                onResetComplete={() => {
+                  setIsPasswordRecovery(false);
+                  setIsAuthenticated(true);
+                }}
+              />
+            ) : isAuthenticated ? (
               <HemsProvider onSignOut={handleSignOut}>
                 <MainAppNavigator />
               </HemsProvider>
@@ -110,28 +158,49 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  outerFrame: {
+    flex: 1,
+    backgroundColor: colors.backdrop,
+    alignItems: 'center',
+  },
+  appFrame: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 500,
+    backgroundColor: colors.canvas,
+  },
   splashContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.canvas,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
+  splashLogoFrame: {
+    width: 84,
+    height: 84,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+    ...shadows.card,
+  },
   splashLogo: {
-    width: 90,
-    height: 90,
-    borderRadius: 20,
-    marginBottom: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 14,
   },
   splashTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#172B22',
-    letterSpacing: 0.5,
+    color: colors.text,
+    letterSpacing: -0.3,
   },
   splashSubtitle: {
     fontSize: 14,
-    color: '#59685F',
+    color: colors.muted,
     marginTop: 4,
   },
 });

@@ -3,7 +3,7 @@ import { View, Text, Switch, Pressable, Modal, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Screen, Section, SettingRow } from '../components/Screen';
 import { useHems } from '../context/HemsContext';
-import { colors, ui } from '../theme/theme';
+import { colors, radii, spacing, ui } from '../theme/theme';
 import {
   getSupabase,
   isSupabaseConfigured,
@@ -28,10 +28,13 @@ export const ProfileScreen = () => {
       const supabase = getSupabase();
       if (supabase && isSupabaseConfigured()) {
         try {
-          const { data: { user } } = await supabase.auth.getUser();
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
           if (user) {
             setUserEmail(user.email || 'user@example.com');
-            const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Homeowner';
+            const fullName =
+              user.user_metadata?.full_name || user.email?.split('@')[0] || 'Homeowner';
             setUserName(fullName);
           }
         } catch {
@@ -51,37 +54,63 @@ export const ProfileScreen = () => {
     return () => unsub();
   }, []);
 
-  return (
-    <Screen title="Settings" subtitle="Account and cloud preferences">
-      {/* Account Info */}
-      <Section title="Account">
-        <View style={ui.card}>
-          <SettingRow
-            label={isCloudLinked ? 'Account' : 'Guest / Demo Profile'}
-            value={`${userName} · ${userEmail}`}
-          />
-          <View style={ui.divider} />
-          <SettingRow label="Edit profile" unavailable />
-        </View>
-      </Section>
+  const initials = userName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('');
 
-      {/* Cloud & Supabase Section */}
-      <Section title="Connection settings">
-        <View style={ui.card}>
+  return (
+    <Screen title="Settings" subtitle="Account, telemetry & preferences">
+      {/* Profile Identity Card */}
+      <View style={styles.profileCard}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initials || 'SM'}</Text>
+        </View>
+        <View style={ui.grow}>
+          <Text style={styles.profileName}>{userName}</Text>
+          <Text style={styles.profileEmail} numberOfLines={1}>
+            {userEmail}
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.statusPill,
+            { backgroundColor: isCloudLinked ? colors.successSoft : colors.primarySoft },
+          ]}
+        >
+          <Text
+            style={[
+              styles.statusPillText,
+              { color: isCloudLinked ? colors.successText : colors.primaryText },
+            ]}
+          >
+            {isCloudLinked ? 'Cloud' : 'Demo'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Connection Settings */}
+      <Section title="Connection">
+        <View style={styles.groupedCard}>
           <SettingRow
             label="Backend Status"
-            value={isCloudLinked ? `Connected` : 'Offline / Demo Simulation Mode'}
+            value={isCloudLinked ? 'Connected to Supabase Realtime' : 'Offline simulation mode'}
+            icon="cloud-check-outline"
+            iconBg={isCloudLinked ? colors.successSoft : colors.primarySoft}
+            iconColor={isCloudLinked ? colors.successText : colors.primaryText}
           >
             <View
               style={[
                 styles.badge,
-                { backgroundColor: isCloudLinked ? colors.greenSoft : colors.amberSoft },
+                { backgroundColor: isCloudLinked ? colors.successSoft : colors.warningSoft },
               ]}
             >
               <Text
                 style={[
                   styles.badgeText,
-                  { color: isCloudLinked ? colors.green : colors.amber },
+                  { color: isCloudLinked ? colors.successText : colors.warningText },
                 ]}
               >
                 {isCloudLinked ? 'Linked' : 'Offline'}
@@ -94,50 +123,93 @@ export const ProfileScreen = () => {
           <SettingRow
             label="Target Smart Meter"
             value={deviceId || 'ESP32-PZEM-DEV-01'}
+            icon="chip"
+            iconBg={colors.surfaceMuted}
+            iconColor={colors.textSecondary}
           />
 
-          <View style={ui.divider} />
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setConfigModalVisible(true)}
-            style={styles.configureButton}
-          >
-            <MaterialCommunityIcons name="cloud-cog-outline" size={20} color={colors.green} />
-            <Text style={styles.configureText}>Configure connection</Text>
-          </Pressable>
+          <View style={styles.cardFooterAction}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setConfigModalVisible(true)}
+              style={({ pressed }) => [ui.softButton, pressed && { opacity: 0.8 }]}
+            >
+              <MaterialCommunityIcons name="cog-outline" size={18} color={colors.primaryText} />
+              <Text style={ui.softButtonText}>Configure connection</Text>
+            </Pressable>
+          </View>
         </View>
       </Section>
 
       {/* System Preferences */}
       <Section title="Preferences">
-        <View style={ui.card}>
-          <SettingRow label="Notifications" value="System & Cutoff Alerts">
+        <View style={styles.groupedCard}>
+          <SettingRow
+            label="Notifications"
+            value="Overload & standby cutoff alerts"
+            icon="bell-ring-outline"
+            iconBg={colors.primarySoft}
+            iconColor={colors.primaryText}
+          >
             <Switch
               hitSlop={12}
               value={notifications}
               onValueChange={setNotifications}
               accessibilityLabel="Notifications"
-              trackColor={{ false: colors.border, true: colors.green }}
+              trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor="#FFFFFF"
+              {...({ activeThumbColor: '#FFFFFF' } as object)}
             />
           </SettingRow>
+
           <View style={ui.divider} />
+
           <SettingRow
-            label="Tariff rate"
+            label="Electricity Tariff"
             value={`₱${report.tariffPerKwh.toFixed(2)}/kWh · Meralco Residential`}
+            icon="cash-multiple"
+            iconBg={colors.successSoft}
+            iconColor={colors.successText}
           />
+
           <View style={ui.divider} />
-          <SettingRow label="Cutoff reminders" unavailable />
+
+          <SettingRow
+            label="Cutoff reminders"
+            icon="timer-outline"
+            iconBg={colors.warningSoft}
+            iconColor={colors.warningText}
+            unavailable
+          />
         </View>
       </Section>
 
-      {/* Security */}
-      <Section title="Security">
-        <View style={ui.card}>
-          <SettingRow label="Change password" unavailable />
+      {/* Account & Security */}
+      <Section title="Account & Security">
+        <View style={styles.groupedCard}>
+          <SettingRow
+            label="Edit profile"
+            icon="account-edit-outline"
+            iconBg={colors.surfaceMuted}
+            iconColor={colors.textSecondary}
+            unavailable
+          />
           <View style={ui.divider} />
-          <SettingRow label="Two-factor authentication" unavailable />
+          <SettingRow
+            label="Change password"
+            icon="lock-outline"
+            iconBg={colors.surfaceMuted}
+            iconColor={colors.textSecondary}
+            unavailable
+          />
+          <View style={ui.divider} />
+          <SettingRow
+            label="Two-factor authentication"
+            icon="shield-check-outline"
+            iconBg={colors.surfaceMuted}
+            iconColor={colors.textSecondary}
+            unavailable
+          />
         </View>
       </Section>
 
@@ -145,13 +217,14 @@ export const ProfileScreen = () => {
       <Pressable
         accessibilityRole="button"
         onPress={() => setConfirmSignOut(true)}
-        style={styles.signOut}
+        style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.8 }]}
       >
+        <MaterialCommunityIcons name="logout" size={18} color={colors.danger} />
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
 
-      <Text style={[ui.muted, { textAlign: 'center' }]}>
-        SYNCO METER · IoT Smart Meter & Standby Reduction Capstone
+      <Text style={[ui.muted, { textAlign: 'center', marginTop: -4 }]}>
+        SYNCO METER · IoT Smart Meter & Standby Reduction
       </Text>
 
       {/* Sign Out Confirmation Modal */}
@@ -165,7 +238,7 @@ export const ProfileScreen = () => {
           <View style={styles.dialog} accessibilityViewIsModal>
             <Text style={ui.heading}>Sign out of SYNCO METER?</Text>
             <Text style={ui.body}>
-              You will return to the login screen and your cloud session will be cleared.
+              You will return to the login screen and your active cloud session will be cleared.
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -173,16 +246,16 @@ export const ProfileScreen = () => {
                 setConfirmSignOut(false);
                 signOut();
               }}
-              style={ui.action}
+              style={({ pressed }) => [styles.dangerModalBtn, pressed && { opacity: 0.85 }]}
             >
               <Text style={ui.actionText}>Sign out</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               onPress={() => setConfirmSignOut(false)}
-              style={styles.signOut}
+              style={({ pressed }) => [styles.cancelModalBtn, pressed && { opacity: 0.8 }]}
             >
-              <Text style={styles.signOutText}>Cancel</Text>
+              <Text style={styles.cancelModalText}>Cancel</Text>
             </Pressable>
           </View>
         </View>
@@ -194,7 +267,7 @@ export const ProfileScreen = () => {
         onClose={() => setConfigModalVisible(false)}
         onSaveSuccess={(cfg) => {
           setIsCloudLinked(Boolean(cfg.url && cfg.anonKey));
-              setDeviceId(cfg.deviceId);
+          setDeviceId(cfg.deviceId);
         }}
       />
     </Screen>
@@ -202,24 +275,80 @@ export const ProfileScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  signOut: {
-    minHeight: 48,
+  profileCard: {
+    ...ui.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: colors.surface,
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.primaryText,
+  },
+  profileName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  profileEmail: {
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  groupedCard: {
+    ...ui.card,
+    paddingVertical: 8,
+    gap: 2,
+  },
+  cardFooterAction: {
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  signOutBtn: {
+    minHeight: 48,
+    borderRadius: radii.control,
+    backgroundColor: colors.dangerSoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: spacing.lg,
   },
   signOutText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    color: colors.danger,
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(23,43,34,0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -228,26 +357,26 @@ const styles = StyleSheet.create({
     ...ui.card,
     width: '100%',
     maxWidth: 400,
-    gap: 16,
+    padding: 22,
+    gap: 14,
   },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  configureButton: {
-    flexDirection: 'row',
+  dangerModalBtn: {
+    minHeight: 46,
+    borderRadius: radii.control,
+    backgroundColor: colors.danger,
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
+    justifyContent: 'center',
   },
-  configureText: {
-    fontSize: 14,
+  cancelModalBtn: {
+    minHeight: 46,
+    borderRadius: radii.control,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelModalText: {
+    fontSize: 15,
     fontWeight: '700',
-    color: colors.green,
+    color: colors.text,
   },
 });

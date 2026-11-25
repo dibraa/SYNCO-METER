@@ -15,11 +15,15 @@ import {
   loadSavedSupabaseConfig,
   saveSupabaseConfig,
   clearSupabaseConfig,
+  restoreDefaultSupabaseConfig,
+  hasDefaultEnvSupabaseConfig,
+  normalizeSupabaseUrl,
   testSupabaseConnection,
   getLoadedConfig,
   isSupabaseConfigured,
   SupabaseConfig,
 } from '../services/supabaseClient';
+import { colors, radii, shadows } from '../theme/theme';
 
 interface SupabaseConfigModalProps {
   visible: boolean;
@@ -51,7 +55,6 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
       setDeviceId(cfg.deviceId || 'ESP32-PZEM-DEV-01');
       setTestResult(null);
 
-      // Refresh from storage in case it changed externally
       loadSavedSupabaseConfig().then((fresh) => {
         setUrl(fresh.url || '');
         setAnonKey(fresh.anonKey || '');
@@ -61,10 +64,15 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
   }, [visible]);
 
   const handleTestConnection = async () => {
-    if (!url.trim() || !anonKey.trim()) {
+    const normalized = normalizeSupabaseUrl(url);
+    if (normalized !== url) {
+      setUrl(normalized);
+    }
+
+    if (!normalized || !anonKey.trim()) {
       setTestResult({
         success: false,
-        message: 'Please enter both the server URL and public API key.',
+        message: 'Please enter both the Supabase Project URL and Publishable / Anon API key.',
       });
       return;
     }
@@ -72,15 +80,29 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
     setIsTesting(true);
     setTestResult(null);
 
-    const result = await testSupabaseConnection(url.trim(), anonKey.trim());
+    const result = await testSupabaseConnection(normalized, anonKey.trim());
     setIsTesting(false);
-    setTestResult(result);
+    if (result.normalizedUrl && result.normalizedUrl !== url) {
+      setUrl(result.normalizedUrl);
+    }
+    setTestResult({ success: result.success, message: result.message });
   };
 
   const handleSave = async () => {
+    const normalized = normalizeSupabaseUrl(url);
+    setUrl(normalized);
+
+    if (normalized && !normalized.startsWith('https://') && !normalized.startsWith('http://')) {
+      setTestResult({
+        success: false,
+        message: 'Server URL must start with https:// (e.g. https://<project-ref>.supabase.co)',
+      });
+      return;
+    }
+
     setIsSaving(true);
     const newConfig: SupabaseConfig = {
-      url: url.trim(),
+      url: normalized,
       anonKey: anonKey.trim(),
       deviceId: deviceId.trim() || 'ESP32-PZEM-DEV-01',
     };
@@ -104,22 +126,39 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
     }
   };
 
+  const handleRestoreDefaults = async () => {
+    const restored = await restoreDefaultSupabaseConfig();
+    setUrl(restored.url);
+    setAnonKey(restored.anonKey);
+    setDeviceId(restored.deviceId);
+    setTestResult({
+      success: true,
+      message: 'Restored default project settings from .env. Tap Test to verify.',
+    });
+    if (onSaveSuccess) {
+      onSaveSuccess(restored);
+    }
+  };
+
   const handleClear = () => {
     Alert.alert(
-      'Reset Credentials',
-      'Are you sure you want to clear saved connection settings? The app will revert to demo simulation mode.',
+      'Switch to Demo Mode',
+      'Clear saved credentials and run in offline demo mode?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reset',
+          text: 'Use Demo Mode',
           style: 'destructive',
           onPress: async () => {
             await clearSupabaseConfig();
+            const cleared = getLoadedConfig();
             setUrl('');
             setAnonKey('');
-            setDeviceId('ESP32-PZEM-DEV-01');
+            setDeviceId(cleared.deviceId);
             setTestResult(null);
-            Alert.alert('Reset', 'Connection settings have been reset.');
+            if (onSaveSuccess) {
+              onSaveSuccess(cleared);
+            }
           },
         },
       ]
@@ -127,71 +166,99 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
   };
 
   const isConfigured = isSupabaseConfigured();
+  const hasDefaults = hasDefaultEnvSupabaseConfig();
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.modalCard}>
+        <View style={styles.sheet}>
+          <View style={styles.dragHandle} />
+
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <MaterialCommunityIcons name="cloud-sync-outline" size={24} color="#34D399" />
+              <View style={styles.headerIcon}>
+                <MaterialCommunityIcons
+                  name="cloud-sync-outline"
+                  size={22}
+                  color={colors.primaryText}
+                />
+              </View>
               <View>
-                <Text style={styles.title}>CONNECTION SETTINGS</Text>
-                <Text style={styles.subtitle}>Connect IoT Telemetry & Authentication</Text>
+                <Text style={styles.title}>Connection Settings</Text>
+                <Text style={styles.subtitle}>Supabase IoT Telemetry & Auth</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close settings">
-              <MaterialCommunityIcons name="close" size={20} color="#94A3B8" />
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeBtn}
+              accessibilityLabel="Close settings"
+            >
+              <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            {/* Status Pill */}
-            <View style={styles.statusBox}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* Status Box */}
+            <View
+              style={[
+                styles.statusBox,
+                {
+                  backgroundColor: isConfigured ? colors.greenSoft : colors.primaryTint,
+                  borderColor: isConfigured ? '#BBF7D0' : colors.primarySoft,
+                },
+              ]}
+            >
               <View
                 style={[
                   styles.statusDot,
-                  { backgroundColor: isConfigured ? '#34D399' : '#F59E0B' },
+                  { backgroundColor: isConfigured ? colors.success : colors.primary },
                 ]}
               />
               <View style={styles.statusInfo}>
                 <Text style={styles.statusLabel}>
-                  {isConfigured ? 'Status: Connected' : 'Status: Offline / Demo Simulation'}
+                  {isConfigured ? 'Cloud Configured' : 'Offline / Demo Simulation'}
                 </Text>
                 <Text style={styles.statusHelp}>
                   {isConfigured
-                    ? 'App is streaming live telemetry and syncing auth.'
-                    : 'Enter your server URL and public API key to connect.'}
+                    ? 'Tap Test below to verify live Auth and database reachability.'
+                    : 'Enter your Supabase project URL and publishable/anon key to connect.'}
                 </Text>
               </View>
             </View>
 
-            {/* Supabase URL */}
-            <Text style={styles.fieldLabel}>Server URL</Text>
+            {/* Server URL */}
+            <Text style={styles.fieldLabel}>Supabase Project URL</Text>
             <TextInput
               style={styles.input}
-              placeholder="https://your-server.example.com"
-              placeholderTextColor="#64748B"
+              placeholder="https://your-project-ref.supabase.co"
+              placeholderTextColor={colors.subtle}
               value={url}
               onChangeText={(t) => {
                 setUrl(t);
                 if (testResult) setTestResult(null);
+              }}
+              onBlur={() => {
+                const norm = normalizeSupabaseUrl(url);
+                if (norm !== url) setUrl(norm);
               }}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
             />
             <Text style={styles.hint}>
-              Enter the server URL provided by your administrator.
+              API URL (https://&lt;ref&gt;.supabase.co) — dashboard links auto-convert
             </Text>
 
-            {/* Supabase Anon Key */}
-            <Text style={styles.fieldLabel}>Anon Public API Key</Text>
+            {/* Publishable / Anon Key */}
+            <Text style={styles.fieldLabel}>Publishable / Anon API Key</Text>
             <TextInput
               style={[styles.input, styles.inputMultiline]}
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              placeholderTextColor="#64748B"
+              placeholder="sb_publishable_... or eyJhbGciOi..."
+              placeholderTextColor={colors.subtle}
               value={anonKey}
               onChangeText={(t) => {
                 setAnonKey(t);
@@ -202,25 +269,23 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
               autoCorrect={false}
             />
             <Text style={styles.hint}>
-              Enter the public API key provided by your administrator.
+              Supabase Project Settings → API Keys (Publishable or legacy Anon key)
             </Text>
 
             {/* Target Device ID */}
-            <Text style={styles.fieldLabel}>Target Device ID (PZEM Smart Plug)</Text>
+            <Text style={styles.fieldLabel}>Target Smart Meter ID</Text>
             <TextInput
               style={styles.input}
               placeholder="ESP32-PZEM-DEV-01"
-              placeholderTextColor="#64748B"
+              placeholderTextColor={colors.subtle}
               value={deviceId}
               onChangeText={setDeviceId}
               autoCapitalize="none"
             />
-            <Text style={styles.hint}>
-              Must match the device_id_str in your public.devices table
-            </Text>
+            <Text style={styles.hint}>Matches device_id_str in your public.devices table</Text>
 
             {/* Test Result Banner */}
-            {testResult && (
+            {testResult ? (
               <View
                 style={[
                   styles.testBanner,
@@ -229,21 +294,21 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
               >
                 <MaterialCommunityIcons
                   name={testResult.success ? 'check-circle' : 'alert-circle'}
-                  size={20}
-                  color={testResult.success ? '#34D399' : '#EF4444'}
+                  size={18}
+                  color={testResult.success ? colors.success : colors.danger}
                 />
                 <Text
                   style={[
                     styles.testText,
-                    { color: testResult.success ? '#34D399' : '#EF4444' },
+                    { color: testResult.success ? colors.successText : colors.danger },
                   ]}
                 >
                   {testResult.message}
                 </Text>
               </View>
-            )}
+            ) : null}
 
-            {/* Actions */}
+            {/* Action Buttons */}
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 style={styles.testBtn}
@@ -251,11 +316,15 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
                 disabled={isTesting}
               >
                 {isTesting ? (
-                  <ActivityIndicator size="small" color="#38BDF8" />
+                  <ActivityIndicator size="small" color={colors.primaryText} />
                 ) : (
                   <>
-                    <MaterialCommunityIcons name="lightning-bolt" size={18} color="#38BDF8" />
-                    <Text style={styles.testBtnText}>TEST CONNECTION</Text>
+                    <MaterialCommunityIcons
+                      name="lightning-bolt"
+                      size={17}
+                      color={colors.primaryText}
+                    />
+                    <Text style={styles.testBtnText}>Test</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -269,20 +338,35 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <MaterialCommunityIcons name="content-save-check" size={18} color="#FFFFFF" />
-                    <Text style={styles.saveBtnText}>SAVE & CONNECT</Text>
+                    <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />
+                    <Text style={styles.saveBtnText}>Save & Connect</Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
 
-            {/* Reset button */}
-            {Boolean(url || anonKey) && (
-              <TouchableOpacity style={styles.resetBtn} onPress={handleClear}>
-                <MaterialCommunityIcons name="trash-can-outline" size={16} color="#94A3B8" />
-                <Text style={styles.resetBtnText}>Clear credentials (Use offline demo)</Text>
-              </TouchableOpacity>
-            )}
+            {/* Secondary Reset Actions */}
+            <View style={styles.secondaryActions}>
+              {hasDefaults ? (
+                <TouchableOpacity style={styles.resetBtn} onPress={handleRestoreDefaults}>
+                  <MaterialCommunityIcons
+                    name="restore"
+                    size={16}
+                    color={colors.primaryText}
+                  />
+                  <Text style={[styles.resetBtnText, { color: colors.primaryText }]}>
+                    Restore project default (.env)
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {Boolean(url || anonKey) ? (
+                <TouchableOpacity style={styles.resetBtn} onPress={handleClear}>
+                  <MaterialCommunityIcons name="cloud-off-outline" size={16} color={colors.muted} />
+                  <Text style={styles.resetBtnText}>Switch to offline demo mode</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </ScrollView>
         </View>
       </View>
@@ -293,17 +377,25 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
-  modalCard: {
-    backgroundColor: '#0F172A',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 24,
     maxHeight: '90%',
-    borderWidth: 1,
-    borderColor: '#334155',
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: 14,
   },
   header: {
     flexDirection: 'row',
@@ -316,39 +408,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  headerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#F8FAFC',
-    letterSpacing: 1,
+    color: colors.text,
   },
   subtitle: {
     fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 2,
+    color: colors.muted,
+    marginTop: 1,
   },
   closeBtn: {
-    padding: 8,
-    backgroundColor: '#1E293B',
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 12,
   },
   statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    padding: 13,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#334155',
   },
   statusDot: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderRadius: 5,
   },
   statusInfo: {
@@ -357,114 +457,109 @@ const styles = StyleSheet.create({
   statusLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: colors.text,
   },
   statusHelp: {
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 12,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
     marginBottom: 6,
     marginTop: 10,
-    letterSpacing: 0.5,
   },
   input: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
+    backgroundColor: colors.canvas,
+    borderRadius: radii.control,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#F8FAFC',
+    color: colors.text,
     borderWidth: 1,
-    borderColor: '#334155',
-    fontSize: 13,
+    borderColor: colors.border,
+    fontSize: 14,
   },
   inputMultiline: {
-    height: 70,
+    height: 76,
     textAlignVertical: 'top',
   },
   hint: {
-    fontSize: 10,
-    color: '#64748B',
+    fontSize: 11,
+    color: colors.muted,
     marginTop: 4,
-    marginBottom: 4,
   },
   testBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     padding: 12,
-    borderRadius: 12,
+    borderRadius: radii.control,
     marginTop: 14,
   },
   testSuccess: {
-    backgroundColor: 'rgba(52, 211, 153, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.3)',
+    backgroundColor: colors.successSoft,
   },
   testFailure: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    backgroundColor: colors.dangerSoft,
   },
   testText: {
     fontSize: 12,
     fontWeight: '600',
     flex: 1,
+    lineHeight: 17,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     marginTop: 20,
   },
   testBtn: {
-    flex: 1,
+    flex: 0.85,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#38BDF8',
-    paddingVertical: 14,
-    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
+    minHeight: 48,
+    borderRadius: radii.control,
   },
   testBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#38BDF8',
-    letterSpacing: 0.5,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primaryText,
   },
   saveBtn: {
-    flex: 1,
+    flex: 1.35,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#177245',
-    paddingVertical: 14,
-    borderRadius: 14,
+    backgroundColor: colors.primary,
+    minHeight: 48,
+    borderRadius: radii.control,
+    ...shadows.button,
   },
   saveBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+  },
+  secondaryActions: {
+    marginTop: 12,
+    gap: 4,
   },
   resetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 16,
-    paddingVertical: 8,
+    minHeight: 38,
   },
   resetBtnText: {
-    fontSize: 12,
-    color: '#94A3B8',
+    fontSize: 13,
+    color: colors.muted,
     fontWeight: '600',
   },
 });

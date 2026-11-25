@@ -136,57 +136,63 @@ npx expo start -c --web
 ```
 *To preview on your physical smartphone, scan the terminal QR code using the **Expo Go** app (iOS/Android).*
 
-### 3. Run Standalone Hardware Simulator
-To simulate an active physical ESP32 streaming readings to the terminal or Supabase without running the mobile app:
-```bash
-node src/mock/standaloneFeeder.js
-```
-
 ---
 
 ## 📂 Project Directory Layout
 
 ```
-d:\1_Capstone\App\
-├── src\
-│   ├── components\
-│   │   ├── BottomNavBar.tsx          # 4-tab bottom navigation
-│   │   ├── RadialGauge.tsx           # Daily Impact semicircle arc meter
-│   │   ├── EfficiencyGauge.tsx       # Audit efficiency score arc gauge
-│   │   ├── DualBarChart.tsx          # 24h Load vs Cut histogram
-│   │   ├── MetricCard.tsx            # Voltage, Current, Frequency, PF cards
-│   │   ├── RelayControlCard.tsx      # Tactile AC breaker switch
-│   │   ├── CostEnergyCard.tsx        # Cumulative kWh and cost accrual
-│   │   ├── ApplianceSelector.tsx     # Mock load switcher (Aircon, Fridge, etc.)
-│   │   └── SupabaseConfigModal.tsx   # Cloud credentials & mode switcher
-│   ├── context\
-│   │   ├── HemsContext.tsx           # Multi-node state, countdown timer & actions
-│   │   └── TelemetryContext.tsx      # Core live telemetry feed & provider
-│   ├── mock\
-│   │   ├── telemetryGenerator.ts     # AC physics simulation & load profiles
-│   │   └── standaloneFeeder.js       # Standalone Node.js ESP32 simulator
-│   ├── screens\
-│   │   ├── LiveDashboardScreen.tsx   # Screen 1: Daily Impact & Radar
-│   │   ├── RoomsSmartPlugsScreen.tsx # Screen 2: Rooms & Auto-Cutoff
-│   │   ├── ConsumptionAnalyticsScreen.tsx # Screen 3: 24h Load Distribution
-│   │   ├── AuditReportsScreen.tsx    # Screen 4: Audit & Efficiency Score
-│   │   └── MainAppNavigator.tsx      # Screen switcher & web responsive frame
-│   ├── services\
-│   │   ├── supabaseClient.ts         # Supabase client with AsyncStorage
-│   │   └── realtimeService.ts        # Supabase Realtime broadcast & changes
-│   └── types\
-│       ├── hems.ts                   # Multi-node, occupancy, & report types
-│       └── telemetry.ts              # Electrical telemetry & appliance types
-├── supabase\
-│   └── migrations\
-│       └── 001_initial_schema.sql    # DDL for devices, readings, RPC, & RLS
-├── firmware\
-│   └── esp32_pzem\
-│       ├── esp32_pzem.ino            # ESP32 C++ firmware with auto-trip
-│       └── README.md                 # Hardware BOM, pinout, & AC safety
-├── metro.config.js                   # Metro resolver configuration for web
+App/
+├── docs/
+│   ├── FIRMWARE.md                       # Hardware BOM, pinout, & AC safety guide
+│   ├── PRODUCT.md                        # Product positioning & principles
+│   ├── surface-brief-auth.md             # Auth flow design brief
+│   └── surface-brief-profile.md          # Profile screen design brief
+├── src/
+│   ├── components/
+│   │   ├── AuthLayout.tsx                # Split-screen auth layout with live demo gauge
+│   │   ├── BottomNavBar.tsx              # 5-tab bottom navigation with alert badge
+│   │   ├── DualBarChart.tsx              # Interactive 24h hourly energy bar chart
+│   │   ├── RadialGauge.tsx               # Semicircular live wattage & metric arc gauge
+│   │   ├── RoomSummary.tsx               # Per-room plug status, relay switch & countdown
+│   │   ├── Screen.tsx                    # Shared screen wrapper, section, disclosure & setting rows
+│   │   └── SupabaseConfigModal.tsx       # Runtime Supabase credentials & connection tester
+│   ├── context/
+│   │   └── HemsContext.tsx               # Multi-node state, countdown timer & Supabase sync
+│   ├── screens/
+│   │   ├── AlertsScreen.tsx              # Active overload, vacancy cutoff & standby notices
+│   │   ├── AuthNavigator.tsx             # Login / Signup screen switcher
+│   │   ├── ConsumptionAnalyticsScreen.tsx# Usage totals, room shares & 24h hourly chart
+│   │   ├── LiveDashboardScreen.tsx       # Home overview, rooms & live radial gauge
+│   │   ├── LoginScreen.tsx               # Supabase & Demo/Guest sign-in
+│   │   ├── MainAppNavigator.tsx          # 5-tab navigator container
+│   │   ├── ProfileScreen.tsx             # Account, cloud status, tariff & sign-out
+│   │   ├── RoomsSmartPlugsScreen.tsx     # Appliances & detailed PZEM node controls
+│   │   └── SignupScreen.tsx              # Account registration screen
+│   ├── services/
+│   │   ├── realtimeService.ts            # Supabase Realtime broadcast & postgres_changes
+│   │   └── supabaseClient.ts             # Supabase client with AsyncStorage config
+│   ├── theme/
+│   │   └── theme.ts                      # Color, spacing, radius & typography tokens
+│   ├── types/
+│   │   ├── hems.ts                       # SmartNode, tab, report & log types
+│   │   └── telemetry.ts                  # Electrical telemetry types
+│   └── utils/
+│       ├── alerts.ts                     # Active alert derivation rules
+│       └── consumption.ts                # Hourly snapshot & PHP cost formatters
+├── supabase/
+│   └── migrations/
+│       └── 001_initial_schema.sql        # DDL for devices, readings, RPC, & RLS
+├── firmware/
+│   └── esp32_pzem/
+│       └── esp32_pzem.ino                # ESP32 C++ firmware with autonomous overload trip
+├── assets/                               # App icons, favicon & SYNCO METER logo
+├── App.tsx
+├── index.ts
+├── app.json
+├── metro.config.js
 ├── package.json
 ├── tsconfig.json
+├── AGENTS.md
 └── README.md
 ```
 

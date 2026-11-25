@@ -6,12 +6,19 @@ import { TabType } from '../types/hems';
 import { colors } from '../theme/theme';
 import { getActiveAlerts } from '../utils/alerts';
 
-const tabs: { id: TabType; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
-  { id: 'home', label: 'Home', icon: 'home-outline' },
-  { id: 'usage', label: 'Usage', icon: 'chart-bar' },
-  { id: 'appliances', label: 'Appliances', icon: 'power-socket-eu' },
-  { id: 'alerts', label: 'Alerts', icon: 'bell-outline' },
-  { id: 'settings', label: 'Settings', icon: 'cog-outline' },
+interface TabConfig {
+  id: TabType;
+  label: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  activeIcon: keyof typeof MaterialCommunityIcons.glyphMap;
+}
+
+const tabs: TabConfig[] = [
+  { id: 'home', label: 'Home', icon: 'home-variant-outline', activeIcon: 'home-variant' },
+  { id: 'usage', label: 'Usage', icon: 'lightning-bolt-outline', activeIcon: 'lightning-bolt' },
+  { id: 'appliances', label: 'Plugs', icon: 'view-grid-outline', activeIcon: 'view-grid' },
+  { id: 'alerts', label: 'Alerts', icon: 'bell-outline', activeIcon: 'bell' },
+  { id: 'settings', label: 'More', icon: 'dots-horizontal-circle-outline', activeIcon: 'dots-horizontal-circle' },
 ];
 
 export const BottomNavBar = () => {
@@ -20,7 +27,7 @@ export const BottomNavBar = () => {
 
   return (
     <View style={styles.bar}>
-      {tabs.map(tab => {
+      {tabs.map((tab) => {
         const isAlertTab = tab.id === 'alerts';
         const isSelected = activeTab === tab.id;
         const showAlertBadge = isAlertTab && alertCount > 0;
@@ -29,17 +36,19 @@ export const BottomNavBar = () => {
           <Pressable
             key={tab.id}
             accessibilityRole="tab"
-            accessibilityLabel={showAlertBadge ? `${tab.label}, ${alertCount} notifications` : tab.label}
+            accessibilityLabel={
+              showAlertBadge ? `${tab.label}, ${alertCount} notifications` : tab.label
+            }
             accessibilityState={{ selected: isSelected }}
             aria-selected={isSelected}
             onPress={() => setActiveTab(tab.id)}
-            style={styles.tab}
+            style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
           >
-            <View style={[styles.icon, isSelected && styles.active]}>
+            <View style={styles.iconWrap}>
               <MaterialCommunityIcons
-                name={tab.icon}
-                size={22}
-                color={isSelected ? colors.green : colors.muted}
+                name={isSelected ? tab.activeIcon : tab.icon}
+                size={24}
+                color={isSelected ? colors.primary : colors.subtle}
               />
               {showAlertBadge && (
                 <View style={styles.badge} accessibilityLabel={`${alertCount} notifications`}>
@@ -47,7 +56,7 @@ export const BottomNavBar = () => {
                 </View>
               )}
             </View>
-            <Text style={[styles.label, isSelected && { color: colors.green, fontWeight: '700' }]}>
+            <Text style={[styles.label, isSelected && styles.labelActive]} numberOfLines={1}>
               {tab.label}
             </Text>
           </Pressable>
@@ -58,18 +67,40 @@ export const BottomNavBar = () => {
 };
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', paddingVertical: 8, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
-  tab: { flex: 1, minHeight: 52, paddingHorizontal: 2, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  icon: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 12, position: 'relative' },
-  active: { backgroundColor: colors.greenSoft },
+  bar: {
+    flexDirection: 'row',
+    paddingTop: 8,
+    paddingBottom: 10,
+    paddingHorizontal: 4,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  tab: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  tabPressed: {
+    opacity: 0.72,
+  },
+  iconWrap: {
+    width: 34,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
   badge: {
     position: 'absolute',
-    top: 0,
-    right: 4,
-    minWidth: 18,
-    height: 18,
+    top: -3,
+    right: -2,
+    minWidth: 17,
+    height: 17,
     borderRadius: 9,
-    backgroundColor: colors.danger,
+    backgroundColor: colors.dangerBright,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
@@ -78,10 +109,19 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     textAlign: 'center',
     includeFontPadding: false,
   },
-  label: { color: colors.muted, fontSize: 11, textAlign: 'center', maxWidth: '100%', flexShrink: 1 },
+  label: {
+    color: colors.subtle,
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  labelActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
 });

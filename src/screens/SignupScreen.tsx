@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,8 +17,13 @@ import {
   onSupabaseConfigChange,
   getLoadedConfig,
   loadSavedSupabaseConfig,
+  checkSupabaseReachability,
+  withAuthRetry,
+  classifySupabaseError,
+  ReachabilityStatus,
 } from '../services/supabaseClient';
 import { SupabaseConfigModal } from '../components/SupabaseConfigModal';
+import { colors, radii, shadows } from '../theme/theme';
 
 interface SignupScreenProps {
   onSwitchToLogin: () => void;
@@ -36,6 +41,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isNetworkErr, setIsNetworkErr] = useState(false);
   const [nameError, setNameError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -44,42 +50,60 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const [showSuccess, setShowSuccess] = useState(false);
 
   const [configModalVisible, setConfigModalVisible] = useState(false);
-  const [configured, setConfigured] = useState<boolean>(isSupabaseConfigured());
+  const [reachability, setReachability] = useState<ReachabilityStatus>(
+    isSupabaseConfigured() ? 'checking' : 'offline'
+  );
   const [projectUrl, setProjectUrl] = useState<string>(getLoadedConfig().url);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(15)).current;
+  const slideAnim = useRef(new Animated.Value(12)).current;
+
+  const refreshReachability = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      setReachability('offline');
+      return;
+    }
+    setReachability('checking');
+    const status = await checkSupabaseReachability();
+    setReachability(status);
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
-        delay: 200,
+        duration: 420,
+        delay: 80,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 500,
-        delay: 200,
+        duration: 420,
+        delay: 80,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
 
+    let mounted = true;
     loadSavedSupabaseConfig().then((cfg) => {
-      setConfigured(isSupabaseConfigured());
+      if (!mounted) return;
       setProjectUrl(cfg.url);
+      refreshReachability();
     });
 
     const unsubscribe = onSupabaseConfigChange((cfg) => {
-      setConfigured(isSupabaseConfigured());
+      if (!mounted) return;
       setProjectUrl(cfg.url);
+      refreshReachability();
     });
 
-    return () => unsubscribe();
-  }, [fadeAnim, slideAnim]);
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [fadeAnim, slideAnim, refreshReachability]);
 
   const validate = (): boolean => {
     let isValid = true;
@@ -127,6 +151,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 
   const handleSignup = async () => {
     setError('');
+    setIsNetworkErr(false);
     if (!validate()) return;
 
     setIsLoading(true);
@@ -134,52 +159,104 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     const supabase = getSupabase();
     if (supabase && isSupabaseConfigured()) {
       try {
-        const { data, error: authError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            data: {
-              full_name: name.trim(),
+        const { data, error: authError } = await withAuthRetry(() =>
+          supabase.auth.signUp({
+            email: email.trim(),
+            password,
+            options: {
+              data: {
+                full_name: name.trim(),
+              },
             },
-          },
-        });
+          })
+        );
 
         if (authError) {
           setIsLoading(false);
-          setError(authError.message);
+          const classified = classifySupabaseError(authError, projectUrl);
+          setIsNetworkErr(classified.isNetworkError);
+          setError(classified.message);
+          if (classified.isNetworkError) {
+            setReachability('unreachable');
+          }
           return;
         }
 
-        setIsLoading(false);
-
-        // Supabase returns a user but session may be null if email confirmation is enabled
-        if (data.session) {
-          setShowSuccess(true);
-          setTimeout(() => {
-            onSignupSuccess();
-          }, 800);
-        } else if (data.user) {
-          // Email confirmation is required
-          setNeedsVerification(true);
-        } else {
-          setShowSuccess(true);
-          setTimeout(() => {
-            onSignupSuccess();
-          }, 800);
+        // Duplicate email check (Supabase returns user with empty identities when email already exists)
+        if (
+          data.user &&
+          Array.isArray(data.user.identities) &&
+          data.user.identities.length === 0
+        ) {
+          setIsLoading(false);
+          setError('An account with this email already exists. Please sign in instead.');
+          return;
         }
-      } catch (err: any) {
+
+        // Instant session path (Confirm email is OFF)
+        if (data.session) {
+          setReachability('reachable');
+          setIsLoading(false);
+          setShowSuccess(true);
+          setTimeout(() => {
+            onSignupSuccess();
+          }, 500);
+          return;
+        }
+
+        // Fallback auto-sign-in attempt if session wasn't immediately attached
+        if (data.user) {
+          const { data: loginData, error: loginError } = await withAuthRetry(() =>
+            supabase.auth.signInWithPassword({
+              email: email.trim(),
+              password,
+            })
+          );
+          setIsLoading(false);
+
+          if (!loginError && loginData.session) {
+            setReachability('reachable');
+            setShowSuccess(true);
+            setTimeout(() => {
+              onSignupSuccess();
+            }, 500);
+            return;
+          }
+
+          if (loginError) {
+            const classified = classifySupabaseError(loginError, projectUrl);
+            setIsNetworkErr(classified.isNetworkError);
+            setError(classified.message);
+            return;
+          }
+
+          setNeedsVerification(true);
+          return;
+        }
+
+        setReachability('reachable');
         setIsLoading(false);
-        setError(err?.message || 'Registration failed. Please try again.');
+        setShowSuccess(true);
+        setTimeout(() => {
+          onSignupSuccess();
+        }, 500);
+      } catch (err) {
+        setIsLoading(false);
+        const classified = classifySupabaseError(err, projectUrl);
+        setIsNetworkErr(classified.isNetworkError);
+        setError(classified.message);
+        if (classified.isNetworkError) {
+          setReachability('unreachable');
+        }
       }
     } else {
-      // Supabase is not configured — permit demo signup
       setTimeout(() => {
         setIsLoading(false);
         setShowSuccess(true);
         setTimeout(() => {
           onSignupSuccess();
-        }, 800);
-      }, 600);
+        }, 700);
+      }, 500);
     }
   };
 
@@ -187,15 +264,15 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     return (
       <View style={styles.centerContainer}>
         <View style={styles.iconCircle}>
-          <MaterialCommunityIcons name="email-check-outline" size={56} color="#177245" />
+          <MaterialCommunityIcons name="email-check-outline" size={50} color={colors.primary} />
         </View>
         <Text style={styles.successTitle}>Check Your Inbox</Text>
         <Text style={styles.verificationText}>
-          We sent a verification link to <Text style={styles.bold}>{email.trim()}</Text>. Please click
-          the link in the email to activate your account, then sign in.
+          We sent a verification link to <Text style={styles.bold}>{email.trim()}</Text>. Open the
+          link in your email to activate your account, then sign in.
         </Text>
         <TouchableOpacity
-          style={styles.primaryButton}
+          style={[styles.primaryButton, { width: '100%' }]}
           onPress={onSwitchToLogin}
           activeOpacity={0.85}
         >
@@ -209,7 +286,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     return (
       <View style={styles.centerContainer}>
         <View style={styles.iconCircle}>
-          <MaterialCommunityIcons name="check-circle" size={56} color="#177245" />
+          <MaterialCommunityIcons name="check-circle" size={54} color={colors.primary} />
         </View>
         <Text style={styles.successTitle}>Account Created!</Text>
         <Text style={styles.successSubtitle}>Welcome to SYNCO METER Energy Management</Text>
@@ -217,213 +294,235 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     );
   }
 
-  let displayHost = '';
-  try {
-    if (projectUrl) {
-      displayHost = new URL(projectUrl).hostname;
-    }
-  } catch {
-    displayHost = projectUrl;
-  }
+  const pillVisual =
+    reachability === 'reachable'
+      ? {
+          bg: colors.successSoft,
+          dot: colors.success,
+          text: colors.successText,
+          label: 'Cloud: Connected',
+        }
+      : reachability === 'checking'
+      ? {
+          bg: colors.primarySoft,
+          dot: colors.primary,
+          text: colors.primaryText,
+          label: 'Checking cloud…',
+        }
+      : reachability === 'unreachable'
+      ? {
+          bg: colors.warningSoft,
+          dot: colors.warning,
+          text: colors.warningText,
+          label: 'Cloud: Unreachable (Tap to fix)',
+        }
+      : {
+          bg: colors.primarySoft,
+          dot: colors.primary,
+          text: colors.primaryText,
+          label: 'Offline / Demo (Tap to connect)',
+        };
 
   return (
     <AuthLayout>
-          <Animated.View
-            style={[
-              styles.formContent,
-              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-            ]}
-          >
-            {/* Supabase Status Pill */}
-            <TouchableOpacity
-              style={[
-                styles.cloudPill,
-                configured ? styles.cloudPillActive : styles.cloudPillInactive,
-              ]}
-              onPress={() => setConfigModalVisible(true)}
-              activeOpacity={0.8}
-            >
-              <View
-                style={[
-                  styles.cloudDot,
-                  { backgroundColor: configured ? '#177245' : '#D97706' },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.cloudPillText,
-                  { color: configured ? '#177245' : '#B45309' },
-                ]}
-                numberOfLines={1}
-              >
-                {configured
-                  ? `Connection: ${displayHost ? 'Connected' : 'Ready'}`
-                  : 'Connection: Not configured (Tap to set up)'}
-              </Text>
-              <MaterialCommunityIcons
-                name="cog-outline"
-                size={14}
-                color={configured ? '#177245' : '#B45309'}
-              />
-            </TouchableOpacity>
+      <Animated.View
+        style={[
+          styles.formContent,
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+        ]}
+      >
+        {/* Connection Status Pill */}
+        <TouchableOpacity
+          style={[styles.cloudPill, { backgroundColor: pillVisual.bg }]}
+          onPress={() => setConfigModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.cloudDot, { backgroundColor: pillVisual.dot }]} />
+          <Text style={[styles.cloudPillText, { color: pillVisual.text }]} numberOfLines={1}>
+            {pillVisual.label}
+          </Text>
+          <MaterialCommunityIcons name="cog-outline" size={14} color={pillVisual.text} />
+        </TouchableOpacity>
 
-            {/* Header */}
-            <Text style={styles.title} accessibilityRole="header">
-              Create Account
-            </Text>
-            <Text style={styles.subtitle}>Register your home energy management profile</Text>
+        {/* Header */}
+        <Text style={styles.title} accessibilityRole="header">
+          Create Account
+        </Text>
+        <Text style={styles.subtitle}>Register your home energy management profile</Text>
 
-            {/* Error Banner */}
-            {error ? (
-              <View style={styles.errorBanner}>
-                <MaterialCommunityIcons name="alert-circle" size={16} color="#EF4444" />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
-            {/* Full Name */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Full Name</Text>
-              <View style={[styles.inputContainer, nameError ? styles.inputError : null]}>
-                <MaterialCommunityIcons
-                  name="account-outline"
-                  size={20}
-                  color={nameError ? '#EF4444' : '#6B7280'}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Juan Dela Cruz"
-                  placeholderTextColor="#6B7280"
-                  value={name}
-                  onChangeText={(t) => {
-                    setName(t);
-                    if (nameError) setNameError('');
-                  }}
-                  autoCapitalize="words"
-                />
-              </View>
-              {nameError ? <Text style={styles.fieldError}>{nameError}</Text> : null}
+        {/* Error Banner */}
+        {error ? (
+          <View style={styles.errorBanner} accessibilityRole="alert">
+            <View style={styles.errorRow}>
+              <MaterialCommunityIcons name="alert-circle" size={17} color={colors.danger} />
+              <Text style={styles.errorText}>{error}</Text>
             </View>
-
-            {/* Email Field */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Email</Text>
-              <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
-                <MaterialCommunityIcons
-                  name="email-outline"
-                  size={20}
-                  color={emailError ? '#EF4444' : '#6B7280'}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="you@example.com"
-                  placeholderTextColor="#6B7280"
-                  value={email}
-                  onChangeText={(t) => {
-                    setEmail(t);
-                    if (emailError) setEmailError('');
-                  }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-              {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
-            </View>
-
-            {/* Password Field */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Password</Text>
-              <View style={[styles.inputContainer, passwordError ? styles.inputError : null]}>
-                <MaterialCommunityIcons
-                  name="lock-outline"
-                  size={20}
-                  color={passwordError ? '#EF4444' : '#6B7280'}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="At least 6 characters"
-                  placeholderTextColor="#6B7280"
-                  value={password}
-                  onChangeText={(t) => {
-                    setPassword(t);
-                    if (passwordError) setPasswordError('');
-                  }}
-                  secureTextEntry={!showPassword}
-                />
+            {isNetworkErr ? (
+              <View style={styles.errorActions}>
                 <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.errorActionBtn}
+                  onPress={handleSignup}
+                  activeOpacity={0.8}
                 >
-                  <MaterialCommunityIcons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={20}
-                    color="#6B7280"
-                  />
+                  <Text style={styles.errorActionText}>Retry</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.errorActionBtn}
+                  onPress={() => setConfigModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.errorActionText}>Connection Settings</Text>
                 </TouchableOpacity>
               </View>
-              {passwordError ? <Text style={styles.fieldError}>{passwordError}</Text> : null}
-            </View>
+            ) : null}
+          </View>
+        ) : null}
 
-            {/* Confirm Password Field */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Confirm Password</Text>
-              <View style={[styles.inputContainer, confirmError ? styles.inputError : null]}>
-                <MaterialCommunityIcons
-                  name="lock-check-outline"
-                  size={20}
-                  color={confirmError ? '#EF4444' : '#6B7280'}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Repeat your password"
-                  placeholderTextColor="#6B7280"
-                  value={confirmPassword}
-                  onChangeText={(t) => {
-                    setConfirmPassword(t);
-                    if (confirmError) setConfirmError('');
-                  }}
-                  secureTextEntry={!showPassword}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSignup}
-                />
-              </View>
-              {confirmError ? <Text style={styles.fieldError}>{confirmError}</Text> : null}
-            </View>
+        {/* Full Name */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Full Name</Text>
+          <View style={[styles.inputContainer, nameError ? styles.inputError : null]}>
+            <MaterialCommunityIcons
+              name="account-outline"
+              size={20}
+              color={nameError ? colors.danger : colors.muted}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Juan Dela Cruz"
+              placeholderTextColor={colors.subtle}
+              value={name}
+              onChangeText={(t) => {
+                setName(t);
+                if (nameError) setNameError('');
+              }}
+              autoCapitalize="words"
+            />
+          </View>
+          {nameError ? <Text style={styles.fieldError}>{nameError}</Text> : null}
+        </View>
 
-            {/* Register Button */}
+        {/* Email Field */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Email</Text>
+          <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
+            <MaterialCommunityIcons
+              name="email-outline"
+              size={20}
+              color={emailError ? colors.danger : colors.muted}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="you@example.com"
+              placeholderTextColor={colors.subtle}
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                if (emailError) setEmailError('');
+              }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+          {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
+        </View>
+
+        {/* Password Field */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Password</Text>
+          <View style={[styles.inputContainer, passwordError ? styles.inputError : null]}>
+            <MaterialCommunityIcons
+              name="lock-outline"
+              size={20}
+              color={passwordError ? colors.danger : colors.muted}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="At least 6 characters"
+              placeholderTextColor={colors.subtle}
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                if (passwordError) setPasswordError('');
+              }}
+              secureTextEntry={!showPassword}
+            />
             <TouchableOpacity
-              style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
-              onPress={handleSignup}
-              disabled={isLoading}
-              activeOpacity={0.85}
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.eyeButton}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Text style={styles.primaryButtonText}>Create Account</Text>
-                  <MaterialCommunityIcons name="arrow-right" size={20} color="#FFFFFF" />
-                </>
-              )}
+              <MaterialCommunityIcons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={colors.muted}
+              />
             </TouchableOpacity>
+          </View>
+          {passwordError ? <Text style={styles.fieldError}>{passwordError}</Text> : null}
+        </View>
 
-            {/* Switch to Login */}
-            <View style={styles.switchRow}>
-              <Text style={styles.switchText}>Already have an account? </Text>
-              <TouchableOpacity onPress={onSwitchToLogin} activeOpacity={0.7}>
-                <Text style={styles.switchLink}>Sign In</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+        {/* Confirm Password Field */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Confirm Password</Text>
+          <View style={[styles.inputContainer, confirmError ? styles.inputError : null]}>
+            <MaterialCommunityIcons
+              name="lock-check-outline"
+              size={20}
+              color={confirmError ? colors.danger : colors.muted}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Repeat your password"
+              placeholderTextColor={colors.subtle}
+              value={confirmPassword}
+              onChangeText={(t) => {
+                setConfirmPassword(t);
+                if (confirmError) setConfirmError('');
+              }}
+              secureTextEntry={!showPassword}
+              returnKeyType="done"
+              onSubmitEditing={handleSignup}
+            />
+          </View>
+          {confirmError ? <Text style={styles.fieldError}>{confirmError}</Text> : null}
+        </View>
+
+        {/* Register Button */}
+        <TouchableOpacity
+          style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
+          onPress={handleSignup}
+          disabled={isLoading}
+          activeOpacity={0.85}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <>
+              <Text style={styles.primaryButtonText}>Create Account</Text>
+              <MaterialCommunityIcons name="arrow-right" size={19} color="#FFFFFF" />
+            </>
+          )}
+        </TouchableOpacity>
+
+        {/* Switch to Login */}
+        <View style={styles.switchRow}>
+          <Text style={styles.switchText}>Already have an account? </Text>
+          <TouchableOpacity onPress={onSwitchToLogin} activeOpacity={0.7}>
+            <Text style={styles.switchLink}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
 
       <SupabaseConfigModal
         visible={configModalVisible}
         onClose={() => setConfigModalVisible(false)}
         onSaveSuccess={(cfg) => {
-          setConfigured(Boolean(cfg.url && cfg.anonKey));
           setProjectUrl(cfg.url);
+          setError('');
+          setIsNetworkErr(false);
+          refreshReachability();
         }}
       />
     </AuthLayout>
@@ -432,93 +531,104 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 
 const styles = StyleSheet.create({
   formContent: {
-    paddingBottom: 24,
+    paddingBottom: 4,
   },
   cloudPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  cloudPillActive: {
-    backgroundColor: '#EAF5EE',
-    borderColor: '#CCDFD1',
-  },
-  cloudPillInactive: {
-    backgroundColor: '#FFF4E5',
-    borderColor: '#FED7AA',
+    paddingVertical: 7,
+    borderRadius: radii.pill,
+    marginBottom: 18,
   },
   cloudDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
   },
   cloudPillText: {
     fontSize: 12,
     fontWeight: '700',
-    maxWidth: 240,
+    maxWidth: 250,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.text,
+    letterSpacing: -0.3,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 20,
+    color: colors.muted,
+    marginBottom: 18,
   },
   errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    backgroundColor: colors.dangerSoft,
+    borderRadius: radii.control,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 16,
+    gap: 8,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
   },
   errorText: {
     fontSize: 13,
-    color: '#EF4444',
-    fontWeight: '500',
+    color: colors.danger,
+    fontWeight: '600',
+    lineHeight: 18,
     flex: 1,
   },
+  errorActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingLeft: 25,
+  },
+  errorActionBtn: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  errorActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.danger,
+  },
   fieldGroup: {
-    marginBottom: 14,
+    marginBottom: 13,
   },
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#4B5563',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.canvas,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
+    borderColor: colors.border,
+    borderRadius: radii.control,
     paddingHorizontal: 14,
-    height: 50,
+    height: 48,
     gap: 10,
   },
   inputError: {
-    borderColor: '#EF4444',
+    borderColor: colors.danger,
   },
   input: {
     flex: 1,
     fontSize: 15,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '500',
     paddingVertical: 0,
   },
@@ -527,24 +637,20 @@ const styles = StyleSheet.create({
   },
   fieldError: {
     fontSize: 12,
-    color: '#EF4444',
+    color: colors.danger,
     marginTop: 4,
-    marginLeft: 4,
+    marginLeft: 2,
   },
   primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#177245',
-    borderRadius: 14,
-    height: 52,
+    backgroundColor: colors.primary,
+    borderRadius: radii.control,
+    height: 50,
     marginTop: 10,
-    shadowColor: '#177245',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 3,
+    ...shadows.button,
   },
   primaryButtonDisabled: {
     opacity: 0.7,
@@ -562,50 +668,50 @@ const styles = StyleSheet.create({
   },
   switchText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.muted,
   },
   switchLink: {
     fontSize: 13,
-    color: '#177245',
+    color: colors.primaryText,
     fontWeight: '700',
   },
   centerContainer: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.canvas,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#EAF5EE',
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
   },
   successTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#111827',
-    marginBottom: 10,
+    color: colors.text,
+    marginBottom: 8,
     textAlign: 'center',
   },
   successSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.muted,
     textAlign: 'center',
   },
   verificationText: {
     fontSize: 14,
     lineHeight: 22,
-    color: '#4B5563',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 24,
   },
   bold: {
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
 });

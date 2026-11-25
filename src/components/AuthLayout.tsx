@@ -10,19 +10,19 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { colors, radii, shadows, spacing } from '../theme/theme';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
 }
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(16)).current;
   const [simulatedWatts, setSimulatedWatts] = useState(847);
 
-  // Simulate live wattage fluctuation
   useEffect(() => {
     const interval = setInterval(() => {
       setSimulatedWatts((prev) => {
@@ -33,71 +33,22 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Entrance animations
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 420,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 600,
+        duration: 420,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
-
-  // Pulse animation for the gauge dot
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.3,
-          duration: 1200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, []);
-
-  const gaugeSize = 80;
-  const strokeWidth = 6;
-  const center = gaugeSize / 2;
-  const radius = center - strokeWidth - 3;
-  const percentage = simulatedWatts / 3000;
-
-  const polarToCartesian = (cx: number, cy: number, r: number, angleInDegrees: number) => {
-    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
-    return {
-      x: cx + r * Math.cos(angleInRadians),
-      y: cy + r * Math.sin(angleInRadians),
-    };
-  };
-
-  const describeArc = (x: number, y: number, r: number, startA: number, endA: number) => {
-    const start = polarToCartesian(x, y, r, endA);
-    const end = polarToCartesian(x, y, r, startA);
-    const arcSweep = endA - startA <= 180 ? '0' : '1';
-    return ['M', start.x, start.y, 'A', r, r, 0, arcSweep, 0, end.x, end.y].join(' ');
-  };
-
-  const startAngle = -215;
-  const endAngle = 35;
-  const totalAngle = endAngle - startAngle;
-  const currentAngle = startAngle + totalAngle * percentage;
+  }, [fadeAnim, slideAnim]);
 
   return (
     <KeyboardAvoidingView
@@ -110,85 +61,58 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-      {/* Brand Panel — Top 40% */}
-      <Animated.View
-        style={[
-          styles.brandPanel,
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-        ]}
-      >
-        <View style={styles.brandContent}>
-          {/* Logo */}
-          <View style={styles.logoRow}>
-            <Image
-              source={require('../../assets/LOGO.jpg')}
-              style={styles.brandLogo}
-              resizeMode="contain"
-              accessibilityLabel="SYNCO METER Logo"
-            />
-            <Text style={styles.brandTitle}>SYNCO METER</Text>
-          </View>
-          <Text style={styles.brandSubtitle}>IoT Energy & Load Management</Text>
-
-          {/* Live Gauge — compact */}
-          <View style={styles.gaugeContainer}>
-            <Svg width={gaugeSize} height={gaugeSize} viewBox={`0 0 ${gaugeSize} ${gaugeSize}`}>
-              <Defs>
-                <LinearGradient id="authGaugeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <Stop offset="0%" stopColor="#00C853" />
-                  <Stop offset="100%" stopColor="#34D399" />
-                </LinearGradient>
-              </Defs>
-              <Circle
-                cx={center}
-                cy={center}
-                r={radius}
-                stroke="#E5E7EB"
-                strokeWidth={strokeWidth}
-                fill="none"
-              />
-              <Circle
-                cx={center}
-                cy={center}
-                r={radius}
-                stroke="url(#authGaugeGradient)"
-                strokeWidth={strokeWidth}
-                strokeLinecap="round"
-                fill="none"
-                strokeDasharray={`${2 * Math.PI * radius}`}
-                strokeDashoffset={`${2 * Math.PI * radius * (1 - percentage)}`}
-                transform={`rotate(${startAngle + 90} ${center} ${center})`}
-              />
-            </Svg>
-            <View style={styles.gaugeCenter}>
-              <Text style={styles.gaugeValue}>{simulatedWatts}</Text>
-              <Text style={styles.gaugeUnit}>W</Text>
-            </View>
-          </View>
-
-          <Text
-            style={styles.liveLabel}
-            accessibilityLabel="Live demo data"
+        {/* Electric-Sky Brand Hero */}
+        <View style={styles.heroWrap}>
+          <Svg
+            style={StyleSheet.absoluteFill}
+            viewBox="0 0 400 240"
+            preserveAspectRatio="none"
+            pointerEvents="none"
           >
-            LIVE DEMO DATA
-          </Text>
+            <Defs>
+              <LinearGradient id="authSkyGrad" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor={colors.heroTop} stopOpacity="1" />
+                <Stop offset="62%" stopColor={colors.heroMid} stopOpacity="1" />
+                <Stop offset="100%" stopColor={colors.canvas} stopOpacity="1" />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="400" height="240" fill="url(#authSkyGrad)" />
+          </Svg>
+
+          <Animated.View
+            style={[
+              styles.brandContent,
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            ]}
+          >
+            <View style={styles.logoFrame}>
+              <Image
+                source={require('../../assets/LOGO.jpg')}
+                style={styles.brandLogo}
+                resizeMode="contain"
+                accessibilityLabel="SYNCO METER Logo"
+              />
+            </View>
+            <Text style={styles.brandTitle}>SYNCO METER</Text>
+            <Text style={styles.brandSubtitle}>Smart Home Energy & Load Control</Text>
+
+            <View style={styles.liveChip} accessibilityLabel={`Live demo ${simulatedWatts} watts`}>
+              <MaterialCommunityIcons name="lightning-bolt" size={14} color="#FFFFFF" />
+              <Text style={styles.liveChipValue}>{simulatedWatts} W</Text>
+              <Text style={styles.liveChipMeta}>· Live Demo</Text>
+            </View>
+          </Animated.View>
         </View>
-      </Animated.View>
 
-      {/* Divider */}
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-      </View>
-
-      {/* Form Panel — Bottom 60% */}
-      <Animated.View
-        style={[
-          styles.formPanel,
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-        ]}
-      >
-        {children}
-      </Animated.View>
+        {/* Elevated White Form Card */}
+        <Animated.View
+          style={[
+            styles.formCardWrap,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          <View style={styles.formCard}>{children}</View>
+        </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -197,85 +121,89 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.canvas,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 32,
   },
-  brandPanel: {
-    paddingVertical: 32,
+  heroWrap: {
+    width: '100%',
+    paddingTop: 32,
+    paddingBottom: 46,
+    paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    position: 'relative',
   },
   brandContent: {
     alignItems: 'center',
   },
-  logoRow: {
-    flexDirection: 'row',
+  logoFrame: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    padding: 6,
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 4,
+    justifyContent: 'center',
+    marginBottom: 12,
+    ...shadows.tile,
   },
   brandLogo: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
   },
   brandTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#111827',
-    letterSpacing: 0.8,
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.heroText,
+    letterSpacing: -0.3,
   },
   brandSubtitle: {
-    fontSize: 11,
-    color: '#6B7280',
-    fontWeight: '500',
-    marginBottom: 12,
-  },
-  gaugeContainer: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gaugeCenter: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gaugeValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  gaugeUnit: {
-    fontSize: 8,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#6B7280',
-    letterSpacing: 1,
+    color: colors.heroTextMuted,
+    marginTop: 4,
   },
-  liveLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#00C853',
-    letterSpacing: 1.5,
-    marginTop: 8,
+  liveChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 14,
+    backgroundColor: colors.heroGlass,
+    borderWidth: 1,
+    borderColor: colors.heroGlassBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
   },
-  divider: {
-    height: 1,
-    marginHorizontal: 24,
+  liveChipValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    fontVariant: ['tabular-nums'],
   },
-  dividerLine: {
-    flex: 1,
-    backgroundColor: '#E5E7EB',
+  liveChipMeta: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.heroTextMuted,
   },
-  formPanel: {
+  formCardWrap: {
+    paddingHorizontal: spacing.lg,
+    marginTop: -22,
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 20,
+  },
+  formCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
 });
