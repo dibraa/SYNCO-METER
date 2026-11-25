@@ -45,7 +45,7 @@ Docs: https://docs.expo.dev/eas/index.md
 After completing any code or documentation task (once typecheck and lint pass), automatically create a local git commit:
 
 1. Verify `.\node_modules\.bin\tsc --noEmit` and `.\node_modules\.bin\eslint App.tsx index.ts src` both exit `0`.
-2. Inspect `git status --short` and confirm no secrets or build artifacts (`.env`, `.env*.local`, `dist/`) are staged.
+2. Inspect `git status --short` and confirm no secrets, build artifacts (`.env`, `.env*.local`, `dist/`), or documentation/defense materials (`docs/`) are staged.
 3. Stage only task-relevant files and commit using Conventional Commits (`<type>(<scope>): <imperative summary>`, ≤72 chars, terse body only for non-obvious why or migrations).
 4. Keep commits local — run `git push` only when the user explicitly requests pushing.
 5. Skip commits on read-only questions, investigations, and unapproved `/plan` drafts. Report the short commit hash in the final response.
